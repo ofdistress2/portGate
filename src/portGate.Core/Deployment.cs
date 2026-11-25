@@ -2,20 +2,17 @@ namespace portGate.Core;
 
 public static class Deployment
 {
-    public const string PackagedHostName = "portGate.Host.exe";
-
-    // Existing SCM registrations and scheduled tasks refer to this path.
-    public const string InstalledHostName = "KnockGate.Host.exe";
-    public const string InstallationDirectoryName = "KnockGate";
-    public const string ServiceName = "KnockGate";
-    public static string InstalledHost => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), InstallationDirectoryName, InstalledHostName);
+    public const string HostName = "portgate.Host.exe";
+    public const string InstallationDirectoryName = "portgate";
+    public const string ServiceName = "portgate";
+    public static string InstalledHost => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), InstallationDirectoryName, HostName);
 
     public static string CopyPackage(string sourceDirectory, string targetDirectory)
     {
         if (Path.GetFullPath(sourceDirectory).TrimEnd(Path.DirectorySeparatorChar)
             .Equals(Path.GetFullPath(targetDirectory).TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
         {
-            string host = Path.Combine(targetDirectory, InstalledHostName);
+            string host = Path.Combine(targetDirectory, HostName);
             if (!File.Exists(host) || !File.Exists(Path.Combine(targetDirectory, "Templates", "knock.ps1"))) throw new IOException("Поставка неполна.");
             return host;
         }
@@ -29,13 +26,13 @@ public static class Deployment
     {
         string source = Path.GetFullPath(sourceDirectory).TrimEnd(Path.DirectorySeparatorChar);
         string target = Path.GetFullPath(targetDirectory).TrimEnd(Path.DirectorySeparatorChar);
-        if (!File.Exists(Path.Combine(source, PackagedHostName)) || !File.Exists(Path.Combine(source, "Templates", "knock.ps1"))) throw new IOException("Поставка неполна: распакуйте весь ZIP, включая Templates.");
+        if (!File.Exists(Path.Combine(source, HostName)) || !File.Exists(Path.Combine(source, "Templates", "knock.ps1"))) throw new IOException("Поставка неполна: распакуйте весь ZIP, включая Templates.");
         if (source.Equals(target, StringComparison.OrdinalIgnoreCase)) throw new IOException("Каталог обновления совпадает с каталогом установки.");
         if (target.StartsWith(source + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) || source.StartsWith(target + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) throw new IOException("Каталоги исходной и установленной поставки не должны быть вложены друг в друга.");
         string manifest = Path.Combine(source, "package-manifest.json");
         if (!File.Exists(manifest)) throw new IOException("Нет package-manifest.json. Распакуйте обновлённую поставку полностью.");
         var entries = Json.Read<List<string>>(File.ReadAllText(manifest));
-        if (entries.Count is < 2 or > 2000 || entries.Distinct(StringComparer.OrdinalIgnoreCase).Count() != entries.Count || !entries.Contains(PackagedHostName) || !entries.Contains("Templates/knock.ps1")) throw new IOException("Некорректный список файлов поставки.");
+        if (entries.Count is < 2 or > 2000 || entries.Distinct(StringComparer.OrdinalIgnoreCase).Count() != entries.Count || !entries.Contains(HostName) || !entries.Contains("Templates/knock.ps1")) throw new IOException("Некорректный список файлов поставки.");
         var files = new List<(string Source, string Relative)>();
         foreach (string relative in entries.Append("package-manifest.json"))
         {
@@ -44,11 +41,7 @@ public static class Deployment
             if (!File.Exists(file)) throw new IOException("Отсутствует файл поставки: " + relative);
             for (string? current = file; current != null && current.StartsWith(source, StringComparison.OrdinalIgnoreCase); current = Path.GetDirectoryName(current))
                 if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) throw new IOException("Ссылки в поставке не поддерживаются.");
-            string packagePath = Path.GetRelativePath(source, file);
-            string installedPath = packagePath.Equals(PackagedHostName, StringComparison.OrdinalIgnoreCase)
-                ? InstalledHostName
-                : packagePath;
-            files.Add((file, installedPath));
+            files.Add((file, Path.GetRelativePath(source, file)));
         }
         string staging = target + ".stage-" + Guid.NewGuid().ToString("N");
         Directory.CreateDirectory(staging);
@@ -60,9 +53,6 @@ public static class Deployment
                 Directory.CreateDirectory(Path.GetDirectoryName(staged)!);
                 File.Copy(file.Source, staged);
             }
-            var installedEntries = files.Select(file => file.Relative.Replace('\\', '/'))
-                .Where(relative => relative != "package-manifest.json").ToArray();
-            File.WriteAllText(Path.Combine(staging, "package-manifest.json"), Json.Write(installedEntries));
             return new PackageUpdate(target, staging, files.Select(file => file.Relative).ToArray());
         }
         catch
@@ -97,7 +87,7 @@ public static class Deployment
             {
                 Directory.Move(staging, target);
                 activated = true;
-                return Path.Combine(target, InstalledHostName);
+                return Path.Combine(target, HostName);
             }
             catch { Rollback(); throw; }
         }

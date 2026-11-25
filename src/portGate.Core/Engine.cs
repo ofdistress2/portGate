@@ -64,7 +64,7 @@ public sealed class Engine(Store store, IFirewall firewall)
             var lease = state.Leases.FirstOrDefault(l => l.ClientId == client.Id && l.Ip == ip && l.Phase == "Committed" && l.Expires > now);
             bool newLease = lease == null;
             if (newLease && state.Leases.Count >= config.MaxLeases) return null;
-            lease ??= new Lease { ClientId = client.Id, Ip = ip, RuleId = "KG.Lease." + Protocol.RandomHex() };
+            lease ??= new Lease { ClientId = client.Id, Ip = ip, RuleId = "portgate.Lease." + Protocol.RandomHex() };
             lease.Expires = now.AddSeconds(Math.Min(client.LeaseSeconds, config.MaxLeaseSeconds));
             if (client.Expires is { } expiry && expiry < lease.Expires) lease.Expires = expiry;
             proof.LeaseId = lease.RuleId;
@@ -100,7 +100,7 @@ public sealed class Engine(Store store, IFirewall firewall)
         if (config.AllowUdpRdp) firewall.Put(new() { Name = lease.RuleId + ".udp", Group = WindowsFirewall.Group, Ports = port.ToString(), Protocol = 17, Remote = lease.Ip });
     }
     private static string[] LeaseRules(Lease lease) => [lease.RuleId + ".tcp", lease.RuleId + ".udp"];
-    private IEnumerable<string> OwnedLeaseRules() => firewall.Rules().Where(r => r.Group == WindowsFirewall.Group && r.Name.StartsWith("KG.Lease.", StringComparison.Ordinal)).Select(r => r.Name);
+    private IEnumerable<string> OwnedLeaseRules() => firewall.Rules().Where(r => r.Group == WindowsFirewall.Group && r.Name.StartsWith("portgate.Lease.", StringComparison.Ordinal)).Select(r => r.Name);
     public void RevokeAll()
     {
         using var guard = store.Lock(); var state = store.Load();
@@ -194,9 +194,9 @@ public sealed class Engine(Store store, IFirewall firewall)
                 // The independent deadline is armed before the first firewall mutation.
                 scheduleRollback(migration.RollbackAt);
                 token.ThrowIfCancellationRequested();
-                firewall.Put(new() { Name = "KG.Knock", Group = WindowsFirewall.Group, Ports = config.UdpPort.ToString(), Protocol = 17, Remote = config.AllowedKnockCidrs.Length == 0 ? "*" : string.Join(",", config.AllowedKnockCidrs) });
+                firewall.Put(new() { Name = "portgate.Authorization", Group = WindowsFirewall.Group, Ports = config.UdpPort.ToString(), Protocol = 17, Remote = config.AllowedKnockCidrs.Length == 0 ? "*" : string.Join(",", config.AllowedKnockCidrs) });
                 foreach (int proto in config.AllowUdpRdp ? new[] { 6, 17 } : new[] { 6 })
-                    firewall.Put(new() { Name = "KG.Trusted." + proto, Group = WindowsFirewall.Group, Ports = config.RdpPort.ToString(), Protocol = proto, Remote = string.Join(",", config.TrustedRdpCidrs) });
+                    firewall.Put(new() { Name = "portgate.Trusted." + proto, Group = WindowsFirewall.Group, Ports = config.RdpPort.ToString(), Protocol = proto, Remote = string.Join(",", config.TrustedRdpCidrs) });
                 foreach (var rule in plan.Disable)
                 {
                     token.ThrowIfCancellationRequested();

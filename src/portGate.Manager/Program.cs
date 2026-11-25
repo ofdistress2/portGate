@@ -522,12 +522,12 @@ internal sealed class MainForm : Form
     private string SelectedId() => SelectedKey(clients, "id") ?? throw new InvalidOperationException(T("Выберите клиента.", "Select a client."));
     private static string HostPath(bool installing = false)
     {
-        string path = Path.Combine(AppContext.BaseDirectory, Deployment.PackagedHostName);
+        string path = Path.Combine(AppContext.BaseDirectory, Deployment.HostName);
         bool runningFromInstalledDirectory = Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory)
             .Equals(Path.GetDirectoryName(Deployment.InstalledHost), StringComparison.OrdinalIgnoreCase);
         if ((!installing || runningFromInstalledDirectory) && File.Exists(Deployment.InstalledHost))
             return Deployment.InstalledHost;
-        if (!File.Exists(path)) throw new FileNotFoundException(T("portGate.Host.exe должен находиться рядом с панелью. Используйте папку опубликованной поставки.", "portGate.Host.exe must be available next to the panel. Use the folder from the release archive."));
+        if (!File.Exists(path)) throw new FileNotFoundException(T("portgate.Host.exe должен находиться рядом с панелью. Используйте папку опубликованной поставки.", "portgate.Host.exe must be available next to the panel. Use the folder from the release archive."));
         return path;
     }
     private async Task<string> Local(string command, params string[] args) => await Task.Run(() => Native.Run(HostPath(command == "install"), new[] { command }.Concat(args), 180000));
@@ -540,7 +540,7 @@ internal sealed class MainForm : Form
         // Pass config JSON through a temporary file, not shell text.
         if (command == "config-save")
         {
-            string temp = Path.Combine(Path.GetTempPath(), "kg-" + Guid.NewGuid().ToString("N") + ".json");
+            string temp = Path.Combine(Path.GetTempPath(), "portgate-" + Guid.NewGuid().ToString("N") + ".json");
             try { File.WriteAllText(temp, args[0]); return await Local(command, temp); } finally { File.Delete(temp); }
         }
         return await Local(command, args);

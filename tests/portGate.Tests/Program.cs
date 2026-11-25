@@ -99,24 +99,24 @@ FirewallClassifier.Analyze([customAllow], [customAllow], allSourcesPlan);
 Check(allSourcesPlan.Safe && allSourcesPlan.Disable.Count == 1, "Zero-prefix permit is unrestricted");
 var sourceDirectory = Path.Combine(temp, "package"); var targetDirectory = Path.Combine(temp, "installed");
 Directory.CreateDirectory(Path.Combine(sourceDirectory, "Templates"));
-File.WriteAllText(Path.Combine(sourceDirectory, Deployment.PackagedHostName), "test executable placeholder");
+File.WriteAllText(Path.Combine(sourceDirectory, Deployment.HostName), "test executable placeholder");
 File.WriteAllText(Path.Combine(sourceDirectory, "Templates", "knock.ps1"), "test template");
-File.WriteAllText(Path.Combine(sourceDirectory, "package-manifest.json"), Json.Write(new[] { Deployment.PackagedHostName, "Templates/knock.ps1" }));
+File.WriteAllText(Path.Combine(sourceDirectory, "package-manifest.json"), Json.Write(new[] { Deployment.HostName, "Templates/knock.ps1" }));
 File.WriteAllText(Path.Combine(sourceDirectory, "unrelated-desktop-document.txt"), "must not be copied");
-string legacyHostPath = Path.Combine(targetDirectory, Deployment.InstalledHostName);
+string previousHostPath = Path.Combine(targetDirectory, Deployment.HostName);
 Directory.CreateDirectory(targetDirectory);
-File.WriteAllText(legacyHostPath, "pilot executable");
+File.WriteAllText(previousHostPath, "previous executable");
 using (var stagedUpdate = Deployment.StagePackage(sourceDirectory, targetDirectory))
 {
     string updatedHost = stagedUpdate.Activate();
-    Check(updatedHost == legacyHostPath && File.ReadAllText(updatedHost) == "test executable placeholder",
-        "Update keeps the pilot service and task executable path");
+    Check(updatedHost == previousHostPath && File.ReadAllText(updatedHost) == "test executable placeholder",
+        "Update keeps the registered service and task executable path");
     stagedUpdate.Rollback();
-    Check(File.ReadAllText(legacyHostPath) == "pilot executable", "Failed upgrade restores the pilot executable");
+    Check(File.ReadAllText(previousHostPath) == "previous executable", "Failed upgrade restores the previous executable");
 }
 string installedPath = Deployment.CopyPackage(sourceDirectory, targetDirectory);
 var installedManifest = Json.Read<string[]>(File.ReadAllText(Path.Combine(targetDirectory, "package-manifest.json")));
-Check(installedManifest.Contains(Deployment.InstalledHostName) && !installedManifest.Contains(Deployment.PackagedHostName),
+Check(installedManifest.Contains(Deployment.HostName),
     "Installed manifest lists the actual executable filename");
 Check(File.Exists(installedPath) && File.Exists(Path.Combine(targetDirectory, "Templates", "knock.ps1")), "Installer copies complete package without service registration");
 Check(!File.Exists(Path.Combine(targetDirectory, "unrelated-desktop-document.txt")), "Installer does not copy unrelated desktop files");
@@ -180,11 +180,11 @@ string p2 = Protocol.Pack($"KG1|PROOF|{config.ServerId}|{client.Id}|{f2[4]}|{f2[
 _ = engine.Handle(p2, ip, now);
 engine.Startup();
 Check(firewall.Rules().Count == 0 && engine.Handle(p2, ip, now) == null && engine.Handle(h2, ip, now) == null, "Restart clears permits without reopening captured requests");
-var prepared = store.Load(); var orphan = new Lease { ClientId = client.Id, Ip = ip.ToString(), RuleId = "KG.Lease.orphan", Expires = now.AddMinutes(5) }; prepared.Leases.Add(orphan); store.Save(prepared);
+var prepared = store.Load(); var orphan = new Lease { ClientId = client.Id, Ip = ip.ToString(), RuleId = "portgate.Lease.orphan", Expires = now.AddMinutes(5) }; prepared.Leases.Add(orphan); store.Save(prepared);
 firewall.Put(new() { Name = orphan.RuleId + ".tcp", Group = WindowsFirewall.Group }); engine.Cleanup();
 Check(firewall.Rules().Count == 0, "Incomplete grant removed by cleanup");
-var expired = store.Load(); expired.Leases.Add(new() { ClientId = client.Id, Ip = ip.ToString(), RuleId = "KG.Lease.expired", Expires = now.AddSeconds(-1), Phase = "Committed" }); store.Save(expired);
-firewall.Put(new() { Name = "KG.Lease.expired.tcp", Group = WindowsFirewall.Group }); engine.Cleanup();
+var expired = store.Load(); expired.Leases.Add(new() { ClientId = client.Id, Ip = ip.ToString(), RuleId = "portgate.Lease.expired", Expires = now.AddSeconds(-1), Phase = "Committed" }); store.Save(expired);
+firewall.Put(new() { Name = "portgate.Lease.expired.tcp", Group = WindowsFirewall.Group }); engine.Cleanup();
 Check(firewall.Rules().Count == 0, "Expired lease removed");
 // Live loopback exchange with the generated PowerShell 5.1 script, in-memory firewall only.
 string templatePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Templates", "knock.ps1"));
@@ -354,7 +354,7 @@ var scheduled = new List<DateTimeOffset>();
 var confirmationDeadline = me.Apply(scheduled.Add, 12);
 Check(scheduled.Count == 2 && scheduled[0] > scheduled[1] && scheduled[1] == confirmationDeadline &&
     migrationStore.Load().Migration!.RollbackAt == confirmationDeadline && confirmationDeadline > DateTimeOffset.UtcNow.AddSeconds(110) &&
-    mf.Rules().Any(r => r.Name == "KG.Trusted.6") && !mf.Rules().Single(r => r.Name == "OriginalRdp").Enabled, "Emergency rollback and full confirmation window have explicit deadlines");
+    mf.Rules().Any(r => r.Name == "portgate.Trusted.6") && !mf.Rules().Single(r => r.Name == "OriginalRdp").Enabled, "Emergency rollback and full confirmation window have explicit deadlines");
 Reject(() => me.Confirm(12), "Old RDP session cannot confirm migration");
 var ms = migrationStore.Load(); ms.Migration!.RollbackAt = DateTimeOffset.UtcNow.AddSeconds(-1); migrationStore.Save(ms); me.Cleanup();
 Check(migrationStore.Load().Migration == null && mf.Rules().Single(r => r.Name == "OriginalRdp").Enabled && mf.Rules().Count == 1, "Unconfirmed generation rolls back to original rules");
@@ -362,7 +362,7 @@ mf.Put(new() { Name = "SecondRdp", Ports = "3389", Protocol = 17 });
 me.Apply(() => { }, 12);
 mf.Rules().Single(r => r.Name == "OriginalRdp").Remote = "192.0.2.9";
 Reject(me.Restore, "Rollback refuses to overwrite administrator changes");
-Check(mf.Rules().Any(r => r.Name == "KG.Trusted.6"), "Conflicting restore retains trusted access");
+Check(mf.Rules().Any(r => r.Name == "portgate.Trusted.6"), "Conflicting restore retains trusted access");
 Check(mf.Rules().Single(r => r.Name == "SecondRdp").Enabled && migrationStore.Load().Migration!.DisabledRules.Single().Name == "OriginalRdp", "Partial restore restores independent rules and retains only unresolved work");
 var duplicateStore = new Store(Path.Combine(temp, "duplicate-names")); duplicateStore.Initialize(false);
 var duplicateConfig = duplicateStore.Config(); duplicateConfig.RdpPort = 3389; duplicateConfig.TrustedRdpCidrs = ["203.0.113.10/32"]; duplicateStore.SaveConfig(duplicateConfig);
@@ -450,9 +450,9 @@ healthState.Migration = new Migration { Config = healthConfig, Confirmed = true 
 healthStore.Save(healthState);
 var healthFirewall = new MemoryFirewall();
 var healthAdmin = new portGate.Host.Administration(new Engine(healthStore, healthFirewall), "unused.exe");
-var authorizationRule = new FirewallRule { Name = "KG.Knock", Group = WindowsFirewall.Group, Protocol = 17, Ports = healthConfig.UdpPort.ToString() };
+var authorizationRule = new FirewallRule { Name = "portgate.Authorization", Group = WindowsFirewall.Group, Protocol = 17, Ports = healthConfig.UdpPort.ToString() };
 healthFirewall.Put(authorizationRule);
-healthFirewall.Put(new FirewallRule { Name = "KG.Trusted.6", Group = WindowsFirewall.Group, Protocol = 6, Ports = "3389", Remote = "192.0.2.8" });
+healthFirewall.Put(new FirewallRule { Name = "portgate.Trusted.6", Group = WindowsFirewall.Group, Protocol = 6, Ports = "3389", Remote = "192.0.2.8" });
 Check(healthAdmin.RefreshHealth(), "Equivalent host addresses pass the health check");
 foreach (var remote in new[] { "LocalSubnet", "192.0.2.10-192.0.2.20", "192.0.2.10/9999999999999999999" })
 {
@@ -461,7 +461,7 @@ foreach (var remote in new[] { "LocalSubnet", "192.0.2.10-192.0.2.20", "192.0.2.
         "Unrecognized firewall address reports unhealthy without stopping monitoring: " + remote);
 }
 authorizationRule.Remote = "*";
-var preparedLease = new Lease { RuleId = "KG.Lease.audit", Ip = "192.0.2.40", Expires = DateTimeOffset.UtcNow.AddMinutes(1) };
+var preparedLease = new Lease { RuleId = "portgate.Lease.audit", Ip = "192.0.2.40", Expires = DateTimeOffset.UtcNow.AddMinutes(1) };
 healthState.Leases.Add(preparedLease);
 healthStore.Save(healthState);
 Check(healthAdmin.RefreshHealth(), "Prepared entry without rules does not interrupt authorization");
@@ -498,7 +498,7 @@ foreach (var (parameters, usage) in new (string[], string)[]
     (["config-save"], "config-save FILE.json"),
 })
 {
-    string host = Path.Combine(AppContext.BaseDirectory, Deployment.PackagedHostName);
+    string host = Path.Combine(AppContext.BaseDirectory, Deployment.HostName);
     try { Native.Run(host, parameters); throw new Exception("Incomplete CLI command succeeded."); }
     catch (IOException error)
     {

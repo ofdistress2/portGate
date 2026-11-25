@@ -52,7 +52,7 @@ internal static class Entry
                 if (!Path.GetFullPath(exe).Equals(Path.GetFullPath(destination), StringComparison.OrdinalIgnoreCase))
                 {
                     using var installLock = store.LockDeployment();
-                    foreach (var p in Process.GetProcessesByName("portGate.Manager").Concat(Process.GetProcessesByName("KnockGate.Manager")))
+                    foreach (var p in Process.GetProcessesByName("portgate.Manager"))
                     {
                         using (p) if (p.MainModule?.FileName is string path && path.StartsWith(Path.GetDirectoryName(destination)! + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
                             throw new IOException("Закройте установленную панель portGate перед обновлением. Новую панель из распакованного ZIP можно оставить открытой.");
@@ -166,7 +166,7 @@ clients edit ID NAME [EXPIRY_ISO8601]
 clients revoke ID | clients rotate ID
 clients export ID SERVER OUTPUT.bat|OUTPUT.ps1|OUTPUT.applescript [true]
 run — консольный запуск; service — режим SCM
---data PATH — каталог состояния (по умолчанию %ProgramData%\KnockGate)
+--data PATH — каталог состояния (по умолчанию %ProgramData%\portgate)
 Код 0: успех; 1: ошибка. plan/diagnose не меняют правила.
 """;
 }

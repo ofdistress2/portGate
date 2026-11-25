@@ -10,7 +10,7 @@ public sealed record RpcRequest(string Command, string[] Args);
 public sealed record RpcResponse(bool Ok, string Data);
 public static class Ipc
 {
-    public const string PipeName = "KnockGate.v1";
+    public const string PipeName = "portgate.v1";
     public const int MaxMessageBytes = 262144;
     [StructLayout(LayoutKind.Sequential)] private struct Security { public int Length; public IntPtr Descriptor; public int Inherit; }
     [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern bool ConvertStringSecurityDescriptorToSecurityDescriptorW(string descriptor, int version, out IntPtr value, out uint size);

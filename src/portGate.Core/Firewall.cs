@@ -56,7 +56,7 @@ public sealed class MemoryFirewall : IFirewall
 }
 public sealed class WindowsFirewall : IFirewall
 {
-    public const string Group = "KnockGate.v1";
+    public const string Group = "portgate.v1";
     private static dynamic Policy() => Activator.CreateInstance(Type.GetTypeFromProgID("HNetCfg.FwPolicy2")!)!;
     public List<FirewallRule> Rules()
     {

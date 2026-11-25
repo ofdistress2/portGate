@@ -15,7 +15,7 @@ After verifying the response, portGate adds a temporary Windows Firewall rule fo
 ## Install
 
 1. Arrange console access to the server and a way to restore the original firewall rules. For a VM, take a snapshot.
-2. Verify the ZIP's SHA-256 against the file attached to the release. Extract the entire archive, launch `portGate.Manager.exe`, and select **Install**.
+2. Verify the ZIP's SHA-256 against the file attached to the release. Extract the entire archive, launch `portgate.Manager.exe`, and select **Install**.
 3. Configure trusted management addresses and review the firewall plan. After applying it, confirm access from a **new** RDP session originating from an allowlisted IP address. Without confirmation, portGate rolls back the changes.
 4. Create personal access passes and share them privately with their owners.
 
