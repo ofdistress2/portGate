@@ -1,21 +1,15 @@
-# portGate 1.0.11
+# portGate 1.0.12
 
-Первая версия portGate с открытым исходным кодом. Основана на сборке 1.0.11, прошедшей двухдневный пилот на Windows RDP-сервере. В ходе пилота проверены установка, остановка, перезапуск и откат.
+- Панель открывается на английском. Чтобы выбрать русский, откройте **Settings → Interface language**, выберите **Русский** и нажмите **Apply language**.
+- Проверка защиты сообщает об изменённом правиле, если Windows Firewall возвращает неподдерживаемый формат адреса. Запись о незавершённом допуске сама по себе больше не прерывает выдачу новых допусков. Оставшиеся правила продолжают проверяться.
+- Исправлены подписи событий отката, смены системного времени и отзыва допуска. Неполные команды CLI теперь показывают синтаксис.
 
-- `portGate-Windows-x64-1.0.11.zip` содержит сервер Windows и панель управления. Распакуйте ZIP целиком и запустите `portGate.Manager.exe`.
-- Для macOS экспортируйте персональный клиентский пропуск из панели Windows.
-- Для обновления закройте установленную панель, распакуйте новый ZIP отдельно и нажмите «Установить» в новой панели. Системные имена и пути пилотной установки используются для сохранения существующих данных и привязок.
-- Файл `.sha256` содержит SHA-256 ZIP. EXE этой сборки не имеют Authenticode-подписи.
-
-См. [руководство администратора](https://github.com/ofdistress2/portGate/blob/v1.0.11/docs/admin-guide.md).
+Скачайте `portGate-Windows-x64-1.0.12.zip`, сверьте SHA-256 и распакуйте архив целиком. Для обновления закройте установленную панель, запустите `portGate.Manager.exe` из нового архива и выберите **Install** или **Установить**. EXE без Authenticode-подписи. [Руководство администратора](https://github.com/ofdistress2/portGate/blob/v1.0.12/docs/admin-guide.md)
 
 ## English
 
-The first open-source portGate release is based on version 1.0.11, which completed a two-day pilot on a Windows RDP server. The pilot covered installation, stopping, restarting, and rollback.
+- The panel opens in English. To use Russian, select **Settings → Interface language → Русский → Apply language**.
+- The health check reports a modified firewall rule when Windows Firewall returns an unsupported address format. An unfinished grant record alone no longer interrupts new grants. The health check still detects leftover rules.
+- Fixed journal labels for incomplete rollback, system clock changes and grant revocation. Incomplete CLI commands now show their usage.
 
-- `portGate-Windows-x64-1.0.11.zip` includes the Windows service and its Russian-language management panel. Extract the full ZIP and run `portGate.Manager.exe`.
-- For macOS, export a personal client pass from the Windows application.
-- To upgrade, close the installed panel, extract the new ZIP separately, and select **Установить** (Install). The package keeps the existing data directory and service identifiers.
-- The `.sha256` file contains the ZIP's SHA-256 checksum. The EXE files are unsigned.
-
-See the [English administrator guide](https://github.com/ofdistress2/portGate/blob/main/docs/admin-guide.en.md).
+Download `portGate-Windows-x64-1.0.12.zip`, verify its SHA-256 checksum, and extract the full archive. To upgrade, close the installed panel, run `portGate.Manager.exe` from the new archive, and select **Install**. The executables are unsigned. [Administrator guide](https://github.com/ofdistress2/portGate/blob/v1.0.12/docs/admin-guide.en.md)

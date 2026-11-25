@@ -23,6 +23,7 @@ public sealed class Administration(Engine engine, string executable)
     }
     public string Dispatch(string command, string[] args, int session, CancellationToken cancellationToken = default)
     {
+        CommandArguments.Validate(command, args.Length);
         if (command is "diagnose" or "plan")
         {
             Config snapshot; using (Store.Lock()) snapshot = Store.Config();
@@ -48,7 +49,6 @@ public sealed class Administration(Engine engine, string executable)
             case "cleanup": engine.Cleanup(); return "Очистка завершена.";
             case "leases-revoke": engine.RevokeAll(); return "Временные разрешения отозваны.";
             case "lease-revoke":
-                if (args.Length != 1) throw new ArgumentException("Укажите идентификатор временного разрешения.");
                 engine.RevokeLease(args[0]);
                 return "Разрешение отозвано. Клиент может запросить доступ заново.";
             case "clients-create":
@@ -130,14 +130,33 @@ public sealed class Administration(Engine engine, string executable)
         state = latest;
         if (!plan.Safe || plan.Disable.Count > 0) return "Защита нарушена: " + string.Join("; ", plan.Conflicts.Concat(plan.Disable.Select(r => r.Name)));
         var rules = engine.Firewall.Rules();
-        bool Match(string name, int protocol, string ports, string remote) => rules.Count(r => r.Name == name && r.Group == WindowsFirewall.Group && r.Enabled && r.Action == 1 && r.Direction == 1 && r.Protocol == protocol && r.Ports == ports && Cidr.NormalizeFirewallAddresses(r.Remote) == Cidr.NormalizeFirewallAddresses(remote) && r.Profiles == 7 && r.Application == "" && r.Service == "") == 1;
+        bool Match(string name, int protocol, string ports, string remote)
+        {
+            var owned = rules.Where(rule => rule.Name == name && rule.Group == WindowsFirewall.Group)
+                .Take(2).ToArray();
+            if (owned.Length != 1) return false;
+            var rule = owned[0];
+            if (!rule.Enabled || rule.Action != 1 || rule.Direction != 1 || rule.Protocol != protocol ||
+                rule.Ports != ports || rule.Profiles != 7 || rule.Application != "" || rule.Service != "") return false;
+
+            try
+            {
+                return Cidr.NormalizeFirewallAddresses(rule.Remote) == Cidr.NormalizeFirewallAddresses(remote);
+            }
+            catch (Exception error) when (error is FormatException or OverflowException)
+            {
+                return false;
+            }
+        }
         if (!Match("KG.Knock", 17, c.UdpPort.ToString(), c.AllowedKnockCidrs.Length == 0 ? "*" : string.Join(",", c.AllowedKnockCidrs))) return "Защита нарушена: правило авторизации изменено";
         foreach (int proto in c.AllowUdpRdp ? new[] { 6, 17 } : new[] { 6 })
             if (!Match("KG.Trusted." + proto, proto, c.RdpPort.ToString(), string.Join(",", c.TrustedRdpCidrs))) return "Защита нарушена: белый список изменён";
         // Every own permit must correspond to the current journal; extra own rules are also a drift.
         var names = new HashSet<string> { "KG.Knock", "KG.Trusted.6" };
         if (c.AllowUdpRdp) names.Add("KG.Trusted.17");
-        foreach (var lease in state.Leases)
+        // A Prepared entry can remain briefly after grant creation failed and its rules were removed.
+        // An actual leftover rule must still be caught as an unexpected owned rule.
+        foreach (var lease in state.Leases.Where(lease => lease.Phase == "Committed"))
         {
             names.Add(lease.RuleId + ".tcp"); if (c.AllowUdpRdp) names.Add(lease.RuleId + ".udp");
             if (!Match(lease.RuleId + ".tcp", 6, c.RdpPort.ToString(), lease.Ip) || c.AllowUdpRdp && !Match(lease.RuleId + ".udp", 17, c.RdpPort.ToString(), lease.Ip)) return "Защита нарушена: временное правило изменено";
