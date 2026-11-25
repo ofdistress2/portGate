@@ -439,6 +439,73 @@ Check(dailyFirewall.Rules().Count == 0, "Expired daily permit is removed");
 var tooLong = dailyStore.Config(); tooLong.MaxLeaseSeconds = Config.LeaseLimitSeconds + 1;
 Reject(() => tooLong.Validate(), "Access window cannot exceed seven days");
 
+// Check policy drift with an in-memory firewall and a separate state journal.
+var healthStore = new Store(Path.Combine(temp, "health")); healthStore.Initialize(false);
+var healthConfig = healthStore.Config();
+healthConfig.RdpPort = 3389;
+healthConfig.AllowUdpRdp = false;
+healthConfig.TrustedRdpCidrs = ["192.0.2.8/32"];
+var healthState = healthStore.Load();
+healthState.Migration = new Migration { Config = healthConfig, Confirmed = true };
+healthStore.Save(healthState);
+var healthFirewall = new MemoryFirewall();
+var healthAdmin = new portGate.Host.Administration(new Engine(healthStore, healthFirewall), "unused.exe");
+var authorizationRule = new FirewallRule { Name = "KG.Knock", Group = WindowsFirewall.Group, Protocol = 17, Ports = healthConfig.UdpPort.ToString() };
+healthFirewall.Put(authorizationRule);
+healthFirewall.Put(new FirewallRule { Name = "KG.Trusted.6", Group = WindowsFirewall.Group, Protocol = 6, Ports = "3389", Remote = "192.0.2.8" });
+Check(healthAdmin.RefreshHealth(), "Equivalent host addresses pass the health check");
+foreach (var remote in new[] { "LocalSubnet", "192.0.2.10-192.0.2.20", "192.0.2.10/9999999999999999999" })
+{
+    authorizationRule.Remote = remote;
+    Check(!healthAdmin.RefreshHealth() && healthAdmin.ProtectionStatus(healthStore.Load(), true).Contains("правило авторизации изменено"),
+        "Unrecognized firewall address reports unhealthy without stopping monitoring: " + remote);
+}
+authorizationRule.Remote = "*";
+var preparedLease = new Lease { RuleId = "KG.Lease.audit", Ip = "192.0.2.40", Expires = DateTimeOffset.UtcNow.AddMinutes(1) };
+healthState.Leases.Add(preparedLease);
+healthStore.Save(healthState);
+Check(healthAdmin.RefreshHealth(), "Prepared entry without rules does not interrupt authorization");
+var temporaryRule = new FirewallRule { Name = preparedLease.RuleId + ".tcp", Group = WindowsFirewall.Group, Protocol = 6, Ports = "3389", Remote = preparedLease.Ip };
+healthFirewall.Put(temporaryRule);
+Check(healthAdmin.Health().Contains("неизвестное собственное правило"), "A rule left by incomplete preparation still fails the health check");
+preparedLease.Phase = "Committed";
+healthStore.Save(healthState);
+Check(healthAdmin.RefreshHealth(), "A committed grant with its expected rule passes the health check");
+healthFirewall.Remove(temporaryRule.Name);
+Check(healthAdmin.Health().Contains("временное правило изменено"), "Missing rule for a committed grant still fails the health check");
+
+foreach (var (command, parameters, usage) in new (string, string[], string)[]
+{
+    ("clients-create", ["Name"], "clients create NAME SECONDS"),
+    ("clients-edit", ["id"], "clients edit ID NAME"),
+    ("clients-revoke", [], "clients revoke ID"),
+    ("clients-rotate", [], "clients rotate ID"),
+    ("clients-export", ["id"], "clients export ID SERVER"),
+    ("config-save", [], "config-save FILE.json"),
+})
+{
+    try { dailyAdmin.Dispatch(command, parameters, 0); throw new Exception("Missing arguments were accepted."); }
+    catch (ArgumentException error)
+    {
+        Check(error.Message.Contains(usage, StringComparison.Ordinal), command + " reports its syntax on incomplete input");
+    }
+}
+foreach (var (parameters, usage) in new (string[], string)[]
+{
+    (["--data"], "--data PATH"),
+    (["clients"], "clients list|create"),
+    (["clients", "create", "Name"], "clients create NAME SECONDS"),
+    (["config-save"], "config-save FILE.json"),
+})
+{
+    string host = Path.Combine(AppContext.BaseDirectory, Deployment.PackagedHostName);
+    try { Native.Run(host, parameters); throw new Exception("Incomplete CLI command succeeded."); }
+    catch (IOException error)
+    {
+        Check(error.Message.Contains(usage, StringComparison.Ordinal), "CLI reports syntax before accessing server state: " + parameters[0]);
+    }
+}
+
 var slowStore = new Store(Path.Combine(temp, "slow-policy")); slowStore.Initialize(false);
 var slowState = slowStore.Load(); slowState.Migration = new Migration { Confirmed = true, Config = slowStore.Config() }; slowStore.Save(slowState);
 using var slowFirewall = new SlowFirewall();

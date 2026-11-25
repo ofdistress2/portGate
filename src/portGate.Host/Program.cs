@@ -20,12 +20,27 @@ internal static class Entry
             var args = input.ToList();
             string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), Deployment.InstallationDirectoryName);
             int data = args.IndexOf("--data");
-            if (data >= 0) { root = args[data + 1]; args.RemoveRange(data, 2); }
+            if (data >= 0)
+            {
+                if (data + 1 >= args.Count || string.IsNullOrWhiteSpace(args[data + 1]) || args[data + 1] == "--data")
+                    throw new ArgumentException("Использование: --data PATH");
+                root = args[data + 1];
+                args.RemoveRange(data, 2);
+                if (args.Contains("--data")) throw new ArgumentException("Укажите --data PATH один раз.");
+            }
             if (args.Count == 0 || args[0] is "help" or "--help") { Console.WriteLine(Help); return 0; }
+            string command = args[0];
+            string[] rest = args.Skip(1).ToArray();
+            if (command == "clients")
+            {
+                if (rest.Length == 0) throw new ArgumentException("Использование: clients list|create|edit|revoke|rotate|export");
+                command = "clients-" + rest[0];
+                rest = rest[1..];
+            }
+            CommandArguments.Validate(command, rest.Length, fromConsole: true);
             var store = new Store(root);
             string exe = Environment.ProcessPath ?? throw new IOException("Неизвестен путь запуска.");
             var engine = new Engine(store, new WindowsFirewall()); var admin = new Administration(engine, exe);
-            string command = args[0]; string[] rest = args.Skip(1).ToArray();
             if (command == "status" && !File.Exists(store.ConfigPath)) { Console.WriteLine(Json.Write(new { protection = "Не настроено", service = "Не установлена", udpPort = 51888, clients = Array.Empty<object>(), leases = Array.Empty<object>() })); return 0; }
             if (command == "init") { store.Initialize(true); Console.WriteLine(store.ConfigPath); return 0; }
             Store.RequireAdmin();
@@ -115,11 +130,9 @@ internal static class Entry
                 return 0;
             }
             if (command == "cleanup") { engine.Cleanup(); return 0; }
-            if (command == "clients") { command = "clients-" + rest[0]; rest = rest.Skip(1).ToArray(); }
             string? output = null;
             if (command == "clients-export")
             {
-                if (rest.Length < 3) throw new ArgumentException("clients export ID SERVER OUTPUT.bat|OUTPUT.ps1|OUTPUT.applescript [true]");
                 output = Path.GetFullPath(rest[2]);
                 string format = Path.GetExtension(output).ToLowerInvariant() switch
                 {

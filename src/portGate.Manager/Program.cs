@@ -641,8 +641,9 @@ internal sealed class MainForm : Form
         "PolicyAppliedPending" => T("Ожидает подтверждения", "Awaiting confirmation"),
         "PolicyConfirmed" => T("Защита подтверждена", "Protection confirmed"),
         "PolicyRestored" => T("Правила восстановлены", "Rules restored"),
-        "PolicyRestoreIncomplete" => T("Откат требует внимания", "Grant revoked"),
-        "ClockChanged" => T("Изменилось системное время", "Temporary grants revoked"),
+        "PolicyRestoreIncomplete" => T("Откат требует внимания", "Rollback requires attention"),
+        "ClockChanged" => T("Изменилось системное время", "System clock changed"),
+        "LeaseRevoked" => T("Разрешение отозвано", "Grant revoked"),
         _ => name ?? T("Событие", "Event")
     };
     private async Task<(string Service, string Protection)> RefreshStatus(CancellationToken token = default)

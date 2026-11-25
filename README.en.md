@@ -8,14 +8,14 @@ The user runs a client script once. The script sends a signed request. The serve
 
 After verifying the response, portGate adds a temporary Windows Firewall rule for new RDP connections from the client's IP address. The rule is removed when the access window expires. Windows credentials, RDP permissions, and Network Level Authentication (NLA) still apply.
 
-- The **server and management panel** run on Windows Server 2016, 2019, or 2022, x64. See [validation](docs/validation.en.md) for the scope of testing. The management panel in version 1.0.11 is in Russian.
+- The **server and management panel** run on Windows Server 2016, 2019, or 2022, x64. See [validation](docs/validation.en.md) for the scope of testing.
 - **Windows access passes** use `.bat` or `.ps1` with Windows PowerShell 5.1. **macOS access passes** use a personal `.applescript` or a `.scpt` saved from it. Each exported file contains an access key.
 - **[Download portGate for Windows x64](https://github.com/ofdistress2/portGate/releases/latest).** The self-contained build includes the .NET runtime.
 
 ## Install
 
 1. Arrange console access to the server and a way to restore the original firewall rules. For a VM, take a snapshot.
-2. Verify the ZIP's SHA-256 against the file attached to the release. Extract the entire archive, launch `portGate.Manager.exe`, and select **Установить** (Install).
+2. Verify the ZIP's SHA-256 against the file attached to the release. Extract the entire archive, launch `portGate.Manager.exe`, and select **Install** (**Установить** in Russian).
 3. Configure trusted management addresses and review the firewall plan. After applying it, confirm access from a **new** RDP session originating from an allowlisted IP address. Without confirmation, portGate rolls back the changes.
 4. Create personal access passes and share them privately with their owners.
 
@@ -34,7 +34,7 @@ Use the .NET 10 SDK on Windows. The first restore needs access to NuGet.
 .\build.ps1 -Publish -SelfContained -Package
 ```
 
-Builds from the current source open the panel in English. To switch to Russian, open **Settings** → **Interface language**, select **Русский**, and click **Apply language**. The panel remembers the choice for the current Windows account.
+Starting with 1.0.12, the panel opens in English. To switch to Russian, open **Settings** → **Interface language**, select **Русский**, and click **Apply language**. The panel remembers the choice for the current Windows account.
 
 The first command builds the solution and runs the tests, including a Windows PowerShell 5.1 UDP loopback test. The second also builds the self-contained package and writes its ZIP and SHA-256 file to `publish`.
 
