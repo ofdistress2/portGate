@@ -38,7 +38,7 @@ try {
 
         $packageRoot = Join-Path $publishRoot 'portGate.Manager'
         Copy-Item "$publishRoot/portGate.Host/*" $packageRoot -Recurse -Force
-        Copy-Item README.md,LICENSE,SECURITY.md $packageRoot -Force
+        Copy-Item README.md,README.en.md,CONTRIBUTING.md,LICENSE,SECURITY.md $packageRoot -Force
         Copy-Item docs,licenses $packageRoot -Recurse -Force
         Get-ChildItem -LiteralPath $packageRoot -Filter '*.pdb' -File -Recurse | Remove-Item -Force
 
