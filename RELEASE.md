@@ -8,8 +8,8 @@
 
 ## English
 
-- The panel opens in English. To use Russian, select **Settings → Interface language → Русский → Apply language**.
+- The panel opens in English. You can change the display language under **Settings → Interface language**.
 - The health check reports a modified firewall rule when Windows Firewall returns an unsupported address format. An unfinished grant record alone no longer interrupts new grants. The health check still detects leftover rules.
 - Fixed journal labels for incomplete rollback, system clock changes and grant revocation. Incomplete CLI commands now show their usage.
 
-Download `portGate-Windows-x64-1.0.12.zip`, verify its SHA-256 checksum, and extract the full archive. To upgrade, close the installed panel, run `portGate.Manager.exe` from the new archive, and select **Install**. The executables are unsigned. [Administrator guide](https://github.com/ofdistress2/portGate/blob/v1.0.12/docs/admin-guide.en.md)
+Download `portGate-Windows-x64-1.0.12.zip`, verify its SHA-256 checksum, and extract the full archive. To upgrade, close the installed panel, run `portGate.Manager.exe` from the new archive, and select **Install**. The executables are unsigned. [Administrator guide](https://github.com/ofdistress2/portGate/blob/main/docs/admin-guide.en.md)
