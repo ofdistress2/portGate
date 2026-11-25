@@ -1,0 +1,1 @@
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType></PropertyGroup><ItemGroup><ProjectReference Include="../../src/portGate.Core/portGate.Core.csproj"/><ProjectReference Include="../../src/portGate.Host/portGate.Host.csproj"/></ItemGroup></Project>

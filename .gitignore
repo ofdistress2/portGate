@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+publish/
+*.user
+test-data/
+.build-home/
+.packages/
+.vs/
+.env
+*.scpt
+/local/
