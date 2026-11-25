@@ -15,7 +15,7 @@ After verifying the response, portGate adds a temporary Windows Firewall rule fo
 ## Install
 
 1. Arrange console access to the server and a way to restore the original firewall rules. For a VM, take a snapshot.
-2. Verify the ZIP's SHA-256 against the file attached to the release. Extract the entire archive, launch `portGate.Manager.exe`, and select **Install** (**Установить** in Russian).
+2. Verify the ZIP's SHA-256 against the file attached to the release. Extract the entire archive, launch `portGate.Manager.exe`, and select **Install**.
 3. Configure trusted management addresses and review the firewall plan. After applying it, confirm access from a **new** RDP session originating from an allowlisted IP address. Without confirmation, portGate rolls back the changes.
 4. Create personal access passes and share them privately with their owners.
 
@@ -34,7 +34,7 @@ Use the .NET 10 SDK on Windows. The first restore needs access to NuGet.
 .\build.ps1 -Publish -SelfContained -Package
 ```
 
-Starting with 1.0.12, the panel opens in English. To switch to Russian, open **Settings** → **Interface language**, select **Русский**, and click **Apply language**. The panel remembers the choice for the current Windows account.
+Starting with 1.0.12, the panel opens in English. To switch to Russian, open **Settings** → **Interface language**, choose Russian, and click **Apply language**. The panel remembers the choice for the current Windows account.
 
 The first command builds the solution and runs the tests, including a Windows PowerShell 5.1 UDP loopback test. The second also builds the self-contained package and writes its ZIP and SHA-256 file to `publish`.
 

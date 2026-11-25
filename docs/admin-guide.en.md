@@ -2,14 +2,14 @@
 
 [Русский](admin-guide.md) · English
 
-Download the Windows x64 archive from the [latest release](https://github.com/ofdistress2/portGate/releases/latest). The management panel opens in English. To switch to Russian, select **Settings → Interface language → Русский → Apply language**. This guide gives both labels where they differ. The command-line syntax is the same on English and Russian Windows.
+Download the Windows x64 archive from the [latest release](https://github.com/ofdistress2/portGate/releases/latest). The management panel opens in English. You can change the display language under **Settings → Interface language**.
 
 ## Install and configure on a test server
 
 1. Arrange console access and save the current firewall rules. Take a snapshot if the server is a VM.
-2. Extract the entire ZIP to a separate directory. Run `portGate.Manager.exe` with elevation and select **Install** (**Установить** in Russian). The installer uses the package manifest to copy the application into `C:\Program Files\KnockGate`. It registers the Windows service and maintenance tasks. Firewall changes are applied in a separate step.
-3. In **Settings** (**Настройки** in Russian), set the trusted management addresses, UDP authorization port, the public IP address or DNS name clients will use, and the allowed access duration. An IPv6 listen address of `::` enables dual-stack IPv4 and IPv6.
-4. Start the service and review the plan. Resolve any Group Policy conflict, overly broad rule, or firewall policy that the plan could not evaluate. Apply the plan with **Apply protection** (**Применить защиту** in Russian). The automatic rollback timer is 120 seconds.
+2. Extract the entire ZIP to a separate directory. Run `portGate.Manager.exe` with elevation and select **Install**. The installer uses the package manifest to copy the application into `C:\Program Files\KnockGate`. It registers the Windows service and maintenance tasks. Firewall changes are applied in a separate step.
+3. In **Settings**, set the trusted management addresses, UDP authorization port, the public IP address or DNS name clients will use, and the allowed access duration. An IPv6 listen address of `::` enables dual-stack IPv4 and IPv6.
+4. Start the service and review the plan. Resolve any Group Policy conflict, overly broad rule, or firewall policy that the plan could not evaluate. Apply the plan with **Apply protection**. The automatic rollback timer is 120 seconds.
 5. From a trusted address, open a **new** RDP session and confirm from that session. Reconnecting to an existing session retains its ID and cannot confirm the change. If confirmation is missing, the scheduled rollback restores the previous rules.
 6. After confirmation, create personal client passes and transfer them privately.
 
