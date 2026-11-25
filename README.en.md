@@ -34,6 +34,8 @@ Use the .NET 10 SDK on Windows. The first restore needs access to NuGet.
 .\build.ps1 -Publish -SelfContained -Package
 ```
 
+Builds from the current source open the panel in English. To switch to Russian, open **Settings** → **Interface language**, select **Русский**, and click **Apply language**. The panel remembers the choice for the current Windows account.
+
 The first command builds the solution and runs the tests, including a Windows PowerShell 5.1 UDP loopback test. The second also builds the self-contained package and writes its ZIP and SHA-256 file to `publish`.
 
 [Contributing](CONTRIBUTING.md#contributing) · [Report a vulnerability](SECURITY.md#reporting-a-vulnerability) · [MIT License](LICENSE)

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using portGate.Core;
+using static portGate.Manager.PanelLanguage;
 
 namespace portGate.Manager;
 internal static class Program
@@ -7,17 +8,23 @@ internal static class Program
     [STAThread] private static void Main()
     {
         ApplicationConfiguration.Initialize();
-        Application.Run(new MainForm());
+        bool showSettings = false;
+        do
+        {
+            using var panel = new MainForm(showSettings);
+            Application.Run(panel);
+            showSettings = panel.LanguageChanged;
+        } while (showSettings);
     }
 }
 internal sealed class MainForm : Form
 {
-    private readonly Label serviceStatus = new() { AutoSize = true, Text = "Служба: получение состояния…" };
-    private readonly Label protectionStatus = new() { AutoSize = true, Text = "Защита: получение состояния…", MaximumSize = new Size(700, 0) };
+    private readonly Label serviceStatus = new() { AutoSize = true, Text = T("Служба: получение состояния…", "Service: checking status…") };
+    private readonly Label protectionStatus = new() { AutoSize = true, Text = T("Защита: получение состояния…", "Protection: checking status…"), MaximumSize = new Size(700, 0) };
     private readonly Label connectionStatus = new() { AutoSize = true, MaximumSize = new Size(700, 0) };
     private readonly Label confirmation = new() { AutoSize = true, Visible = false, MaximumSize = new Size(700, 0), Padding = new Padding(8) };
-    private readonly Label operationTitle = new() { AutoSize = true, Text = "Последнее действие" };
-    private readonly Label operationDetail = new() { AutoSize = true, Text = "Действий пока не выполняли.", MaximumSize = new Size(700, 0) };
+    private readonly Label operationTitle = new() { AutoSize = true, Text = T("Последнее действие", "Latest action") };
+    private readonly Label operationDetail = new() { AutoSize = true, Text = T("Действий пока не выполняли.", "No actions yet."), MaximumSize = new Size(700, 0) };
     private readonly FlowLayoutPanel operation = new() { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(10), Margin = new Padding(3, 8, 3, 8) };
     private readonly Dictionary<Button, Func<bool>> overviewActions = [];
     private readonly List<Button> clientActions = [];
@@ -31,9 +38,9 @@ internal sealed class MainForm : Form
     private readonly ToolStripStatusLabel message = new() { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
     private readonly DataGridView clients = Grid();
     private readonly DataGridView leases = Grid();
-    private readonly Label journalStatus = new() { AutoSize = true, Text = "Журнал ещё не загружен." };
+    private readonly Label journalStatus = new() { AutoSize = true, Text = T("Журнал ещё не загружен.", "The journal has not been loaded.") };
     private readonly DataGridView events = Grid();
-    private readonly Label planSummary = new() { AutoSize = true, Text = "Нажмите «Проверить правила», чтобы увидеть результат." };
+    private readonly Label planSummary = new() { AutoSize = true, Text = T("Нажмите «Проверить правила», чтобы увидеть результат.", "Select Check rules to see the result.") };
     private FirewallPlan? latestPlan;
     private readonly NumericUpDown port = Number(1024, 65535, 51888);
     private readonly DurationInput duration = new(300);
@@ -48,12 +55,14 @@ internal sealed class MainForm : Form
     private bool settingsDirty, loadingSettings;
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 15000 };
     private readonly System.Windows.Forms.Timer countdown = new() { Interval = 1000 };
-    public MainForm()
+    internal bool LanguageChanged { get; private set; }
+
+    public MainForm(bool showSettings = false)
     {
-        Text = "portGate " + typeof(MainForm).Assembly.GetName().Version?.ToString(3) + " — управление доступом RDP"; MinimumSize = new Size(800, 650); Size = new Size(1000, 780);
+        Text = "portGate " + typeof(MainForm).Assembly.GetName().Version?.ToString(3) + T(" — управление доступом RDP", " — RDP access management"); MinimumSize = new Size(800, 650); Size = new Size(1000, 780);
         Font = new Font("Segoe UI", 10); AutoScaleMode = AutoScaleMode.Dpi; StartPosition = FormStartPosition.CenterScreen;
         var tabs = new TabControl { Dock = DockStyle.Fill };
-        var overview = Page(tabs, "Обзор");
+        var overview = Page(tabs, T("Обзор", "Overview"));
         var currentStatus = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(8), BackColor = SystemColors.Window };
         serviceStatus.Font = new Font(Font, FontStyle.Bold);
         protectionStatus.Font = new Font(Font, FontStyle.Bold);
@@ -62,14 +71,14 @@ internal sealed class MainForm : Form
         confirmation.Font = new Font(Font, FontStyle.Bold);
         confirmation.BackColor = SystemColors.Window;
         overview.Controls.Add(confirmation);
-        Heading(overview, "Служба");
+        Heading(overview, T("Служба", "Service"));
         var service = Row(overview);
         foreach (var (caption, title, command, expectedState, success) in new[]
         {
-            ("Установить", "Установка службы", "install", "Installed", "Служба установлена. Запустите её кнопкой «Запустить»."),
-            ("Запустить", "Запуск службы", "start", "Running", "Служба запущена."),
-            ("Остановить", "Остановка службы", "stop", "Stopped", "Служба остановлена."),
-            ("Перезапустить", "Перезапуск службы", "restart", "Running", "Служба перезапущена.")
+            (T("Установить", "Install"), T("Установка службы", "Install service"), "install", "Installed", T("Служба установлена. Запустите её кнопкой «Запустить».", "Service installed. Select Start to run it.")),
+            (T("Запустить", "Start"), T("Запуск службы", "Start service"), "start", "Running", T("Служба запущена.", "The service is running.")),
+            (T("Остановить", "Stop"), T("Остановка службы", "Stop service"), "stop", "Stopped", T("Служба остановлена.", "The service has stopped.")),
+            (T("Перезапустить", "Restart"), T("Перезапуск службы", "Restart service"), "restart", "Running", T("Служба перезапущена.", "The service restarted."))
         })
             OverviewButton(service, caption, title, async () =>
             {
@@ -83,95 +92,135 @@ internal sealed class MainForm : Form
                 "Running" or "Paused" => command is "install" or "stop" or "restart",
                 _ => false
             });
-        OverviewButton(service, "Удалить…", "Удаление службы", async () =>
+        OverviewButton(service, T("Удалить…", "Uninstall…"), T("Удаление службы", "Uninstall service"), async () =>
         {
-            var answer = MessageBox.Show(this, "Восстановить прежние правила?\nДа — восстановить. Нет — оставить постоянный белый список. Отмена — ничего не делать.", "Удаление службы", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
-            if (answer == DialogResult.Cancel) return (Notice.Cancelled, "Удаление отменено.");
+            var answer = MessageBox.Show(this, T("Восстановить прежние правила?\nДа — восстановить. Нет — оставить постоянный белый список. Отмена — ничего не делать.", "Restore the previous firewall rules?\nYes restores the rules. No keeps the permanent allowlist. Cancel leaves the service installed."), T("Удаление службы", "Uninstall service"), MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+            if (answer == DialogResult.Cancel) return (Notice.Cancelled, T("Удаление отменено.", "Uninstall cancelled."));
             await Local("uninstall", answer == DialogResult.Yes ? "--restore" : "--keep-trusted");
-            return await VerifyServiceState("Не установлена", "Служба удалена.");
+            return await VerifyServiceState("Не установлена", T("Служба удалена.", "The service was removed."));
         }, refresh: false, available: () => currentService is null or "Stopped" or "Running" or "Paused");
-        Heading(overview, "Защита RDP");
+        Heading(overview, T("Защита RDP", "RDP protection"));
         var policy = Row(overview);
-        OverviewButton(policy, "Проверить правила", "Проверка правил", async () =>
+        OverviewButton(policy, T("Проверить правила", "Check rules"), T("Проверка правил", "Check firewall rules"), async () =>
         {
             var p = await ReadPlan();
-            if (!p.Safe) return (Notice.Attention, $"Найдено конфликтов: {p.Conflicts.Count}. Откройте подробности плана.");
-            return (p.Warnings.Count > 0 ? Notice.Attention : Notice.Success, $"Конфликтов нет. Правил к отключению: {p.Disable.Count}. Предупреждений: {p.Warnings.Count}.");
+            if (!p.Safe) return (Notice.Attention, T($"Найдено конфликтов: {p.Conflicts.Count}. Откройте подробности плана.", $"Found {p.Conflicts.Count} conflicts. Open the plan details for more information."));
+            return (p.Warnings.Count > 0 ? Notice.Attention : Notice.Success, T($"Конфликтов нет. Правил к отключению: {p.Disable.Count}. Предупреждений: {p.Warnings.Count}.", $"No conflicts. Rules to disable: {p.Disable.Count}. Warnings: {p.Warnings.Count}."));
         });
-        OverviewButton(policy, "Применить защиту…", "Применение защиты", async () =>
+        OverviewButton(policy, T("Применить защиту…", "Apply protection…"), T("Применение защиты", "Apply protection"), async () =>
         {
             var p = await ReadPlan();
-            if (!p.Safe) return (Notice.Error, $"Применение остановлено. {p.Conflicts[0]}");
+            if (!p.Safe) return (Notice.Error, T($"Применение остановлено. {DisplayDetail(p.Conflicts[0])}", $"Unable to apply protection. {DisplayDetail(p.Conflicts[0])}"));
             if (!ShowPlan(p, confirmApply: true))
-                return (Notice.Cancelled, "Применение отменено.");
+                return (Notice.Cancelled, T("Применение отменено.", "Applying protection was cancelled."));
             return (Notice.Attention, await Request("apply"));
         }, available: () => currentService != "Не установлена" && policyConfigured != true && hasTrustedSources != false);
-        OverviewButton(policy, "Подтвердить новый вход", "Подтверждение нового входа",
+        OverviewButton(policy, T("Подтвердить новый вход", "Confirm new sign-in"), T("Подтверждение нового входа", "Confirm new RDP sign-in"),
             async () => (Notice.Success, await Request("confirm")), available: () => awaitingConfirmation == true && ConfirmationRemaining() is { Ticks: > 0 });
-        OverviewButton(policy, "Восстановить правила…", "Восстановление правил", async () =>
+        OverviewButton(policy, T("Восстановить правила…", "Restore rules…"), T("Восстановление правил", "Restore firewall rules"), async () =>
         {
-            if (!Confirm("Восстановить правила, изменённые portGate?")) return (Notice.Cancelled, "Восстановление отменено.");
+            if (!Confirm(T("Восстановить правила, изменённые portGate?", "Restore the rules changed by portGate?"))) return (Notice.Cancelled, T("Восстановление отменено.", "Restore cancelled."));
             return (Notice.Success, await Request("restore"));
         }, available: () => policyConfigured != false);
         operationTitle.Font = new Font(Font, FontStyle.Bold);
         operation.BackColor = SystemColors.Window;
         operation.Controls.AddRange([operationTitle, operationDetail]);
         overview.Controls.Add(operation);
-        Heading(overview, "План правил");
+        Heading(overview, T("План правил", "Firewall plan"));
         overview.Controls.Add(planSummary);
-        var planDetails = Button(Row(overview), "Подробности плана…", () =>
+        var planDetails = Button(Row(overview), T("Подробности плана…", "Plan details…"), () =>
         {
             if (latestPlan is { } snapshot) ShowPlan(snapshot, confirmApply: false);
             return Task.CompletedTask;
         });
         overviewActions.Add(planDetails, () => latestPlan != null);
-        Heading(overview, "Временные разрешения");
-        overview.Controls.Add(new Label { Text = "Отзыв разрешения не завершает уже открытый RDP-сеанс.", AutoSize = true });
+        Heading(overview, T("Временные разрешения", "Temporary grants"));
+        overview.Controls.Add(new Label { Text = T("Отзыв разрешения не завершает уже открытый RDP-сеанс.", "Revoking a grant leaves existing RDP sessions open."), AutoSize = true });
         overview.Controls.Add(leases);
         var leaseActions = Row(overview);
-        OverviewButton(leaseActions, "Отозвать выбранное…", "Отзыв разрешения", async () =>
+        OverviewButton(leaseActions, T("Отозвать выбранное…", "Revoke selected…"), T("Отзыв разрешения", "Revoke grant"), async () =>
         {
-            string id = SelectedKey(leases, "ruleId") ?? throw new InvalidOperationException("Выберите разрешение.");
-            if (!Confirm("Отозвать выбранное разрешение? Ключ останется действующим, клиент сможет запросить доступ заново."))
-                return (Notice.Cancelled, "Отзыв отменён.");
+            string id = SelectedKey(leases, "ruleId") ?? throw new InvalidOperationException(T("Выберите разрешение.", "Select a grant."));
+            if (!Confirm(T("Отозвать выбранное разрешение? Ключ останется действующим, клиент сможет запросить доступ заново.", "Revoke the selected grant? The key stays valid and the client can request access again.")))
+                return (Notice.Cancelled, T("Отзыв отменён.", "Revocation cancelled."));
             return (Notice.Success, await Request("lease-revoke", id));
         }, available: () => SelectedKey(leases, "ruleId") != null);
-        OverviewButton(leaseActions, "Отозвать все временные разрешения", "Отзыв временных разрешений",
+        OverviewButton(leaseActions, T("Отозвать все временные разрешения", "Revoke all temporary grants"), T("Отзыв временных разрешений", "Revoke temporary grants"),
             async () => (Notice.Success, await Request("leases-revoke")), available: () => leases.Rows.Count > 0);
         leases.SelectionChanged += (_, _) => RefreshOverviewActions();
-        var access = Page(tabs, "Клиенты доступа");
-        access.Controls.Add(new Label { Text = "Один скрипт = один пропуск. Передавайте файл только его владельцу.", AutoSize = true });
+        var access = Page(tabs, T("Клиенты доступа", "Clients"));
+        access.Controls.Add(new Label { Text = T("Один скрипт = один пропуск. Передавайте файл только его владельцу.", "Each script is an access pass. Share the file only with its owner."), AutoSize = true });
         access.Controls.Add(clients);
         var tools = Row(access);
-        Button(tools, "Создать и сохранить скрипт…", CreateClient);
-        clientActions.Add(Button(tools, "Сохранить скрипт…", async () => await Export(SelectedId())));
-        clientActions.Add(Button(tools, "Отозвать", async () => { if (Confirm("Отозвать доступ и временные разрешения клиента?")) { message.Text = await Request("clients-revoke", SelectedId()); await RefreshData(); } }));
-        clientActions.Add(Button(tools, "Перевыпустить ключ", async () => { if (Confirm("Старые скрипты перестанут работать. Перевыпустить ключ?")) { message.Text = await Request("clients-rotate", SelectedId()); await RefreshData(); } }));
-        clientActions.Add(Button(tools, "Изменить имя и срок…", async () =>
+        Button(tools, T("Создать и сохранить скрипт…", "Create and save script…"), CreateClient);
+        clientActions.Add(Button(tools, T("Сохранить скрипт…", "Save script…"), async () => await Export(SelectedId())));
+        clientActions.Add(Button(tools, T("Отозвать", "Revoke"), async () => { if (Confirm(T("Отозвать доступ и временные разрешения клиента?", "Revoke the client's access and temporary grants?"))) { message.Text = DisplayDetail(await Request("clients-revoke", SelectedId())); await RefreshData(); } }));
+        clientActions.Add(Button(tools, T("Перевыпустить ключ", "Rotate key"), async () => { if (Confirm(T("Старые скрипты перестанут работать. Перевыпустить ключ?", "Existing scripts will stop working. Rotate the key?"))) { message.Text = DisplayDetail(await Request("clients-rotate", SelectedId())); await RefreshData(); } }));
+        clientActions.Add(Button(tools, T("Изменить имя и срок…", "Edit name and duration…"), async () =>
         {
             string id = SelectedId();
             var existing = Json.Read<List<ClientRecord>>(await Request("clients-list")).Single(c => c.Id == id);
             using var dialog = new ClientDialog(false, Json.Read<Config>(await Request("config")), existing);
             if (dialog.ShowDialog(this) != DialogResult.OK) return;
-            message.Text = await Request("clients-edit", id, dialog.ClientName, dialog.Expiry, dialog.Seconds.ToString()); await RefreshData();
+            message.Text = DisplayDetail(await Request("clients-edit", id, dialog.ClientName, dialog.Expiry, dialog.Seconds.ToString())); await RefreshData();
         }));
         clients.SelectionChanged += (_, _) => RefreshClientActions();
         clients.CellFormatting += (_, e) =>
         {
             if (e.RowIndex >= 0 && e.RowIndex < clients.Rows.Count && clients.Columns.Contains("active") &&
-                clients.Rows[e.RowIndex].Cells["active"].Value?.ToString() == "Нет")
+                clients.Rows[e.RowIndex].Cells["active"].Value?.ToString() == T("Нет", "No"))
                 e.CellStyle!.ForeColor = SystemColors.GrayText;
         };
-        var settings = Page(tabs, "Настройки");
-        settings.Controls.Add(new Label { AutoSize = true, Text = "Внешний IP или DNS сервера для скриптов доступа" }); settings.Controls.Add(serverAddress);
-        settings.Controls.Add(new Label { AutoSize = true, Text = "Порт UDP авторизации" }); settings.Controls.Add(port);
-        settings.Controls.Add(new Label { AutoSize = true, Text = "Окно доступа по умолчанию (24 часа = переподключение в течение суток)" }); settings.Controls.Add(duration);
-        settings.Controls.Add(new Label { AutoSize = true, Text = "Максимальное окно доступа клиента (до 7 суток)" }); settings.Controls.Add(maximumDuration);
-        settings.Controls.Add(new Label { AutoSize = true, Text = "Постоянный белый список RDP: IP или CIDR, по одному на строку" });
+        var settings = Page(tabs, T("Настройки", "Settings"));
+        var languageRow = Row(settings);
+        languageRow.Controls.Add(new Label { AutoSize = true, Text = T("Язык интерфейса", "Interface language") });
+        var languages = new ComboBox
+        {
+            Name = "interfaceLanguage",
+            AccessibleName = T("Язык интерфейса", "Interface language"),
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Width = 155
+        };
+        languages.Items.AddRange(["English", "Русский"]);
+        languages.SelectedIndex = Current == InterfaceLanguage.Russian ? 1 : 0;
+        languageRow.Controls.Add(languages);
+        var applyLanguage = new Button
+        {
+            Name = "applyLanguage",
+            Text = T("Применить язык", "Apply language"),
+            AutoSize = true,
+            Enabled = false
+        };
+        languageRow.Controls.Add(applyLanguage);
+        languages.SelectedIndexChanged += (_, _) => applyLanguage.Enabled = SelectedLanguage() != Current;
+        InterfaceLanguage SelectedLanguage() => languages.SelectedIndex == 1 ? InterfaceLanguage.Russian : InterfaceLanguage.English;
+        applyLanguage.Click += (_, _) =>
+        {
+            if (busy || SelectedLanguage() == Current) return;
+            if (settingsDirty && !Confirm(T(
+                "Смена языка перезапустит панель и сбросит несохранённые изменения формы. Продолжить?",
+                "Changing the language will reopen the panel and discard unsaved form changes. Continue?"))) return;
+            try { Save(SelectedLanguage()); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+            {
+                MessageBox.Show(this, error.Message, T("Язык не сохранён", "Could not save the language"),
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            settingsDirty = false;
+            LanguageChanged = true;
+            Close();
+        };
+
+        settings.Controls.Add(new Label { AutoSize = true, Text = T("Внешний IP или DNS сервера для скриптов доступа", "Public server IP or DNS name for access scripts") }); settings.Controls.Add(serverAddress);
+        settings.Controls.Add(new Label { AutoSize = true, Text = T("Порт UDP авторизации", "UDP authorization port") }); settings.Controls.Add(port);
+        settings.Controls.Add(new Label { AutoSize = true, Text = T("Окно доступа по умолчанию (24 часа = переподключение в течение суток)", "Default access window (24 hours allows reconnection for one day)") }); settings.Controls.Add(duration);
+        settings.Controls.Add(new Label { AutoSize = true, Text = T("Максимальное окно доступа клиента (до 7 суток)", "Maximum client access window (up to 7 days)") }); settings.Controls.Add(maximumDuration);
+        settings.Controls.Add(new Label { AutoSize = true, Text = T("Постоянный белый список RDP: IP или CIDR, по одному на строку", "Permanent RDP allowlist (one IP address or CIDR per line)") });
         settings.Controls.Add(trustedHint);
         settings.Controls.Add(trusted);
         var settingsActions = Row(settings);
-        Button(settingsActions, "Сохранить настройки", async () =>
+        Button(settingsActions, T("Сохранить настройки", "Save settings"), async () =>
         {
             config ??= Json.Read<Config>(await Request("config"));
             var next = Json.Read<Config>(Json.Write(config));
@@ -179,23 +228,23 @@ internal sealed class MainForm : Form
             next.ServerAddress = serverAddress.Text.Trim();
             next.TrustedRdpCidrs = trusted.Lines.Select(x => x.Trim()).Where(x => x != "").ToArray();
             next.Validate();
-            message.Text = await Request("config-save", Json.Write(next));
+            message.Text = DisplayDetail(await Request("config-save", Json.Write(next)));
             settingsDirty = false; await RefreshData();
         });
-        Button(settingsActions, "Отменить изменения", async () =>
+        Button(settingsActions, T("Отменить изменения", "Discard changes"), async () =>
         {
-            if (!settingsDirty || !Confirm("Загрузить сохранённые настройки и отбросить изменения формы?")) return;
+            if (!settingsDirty || !Confirm(T("Загрузить сохранённые настройки и отбросить изменения формы?", "Reload saved settings and discard changes on this form?"))) return;
             settingsDirty = false;
             await RefreshData();
         });
-        Button(settingsActions, "Расширенные настройки (JSON)…", EditJsonConfig);
-        settings.Controls.Add(new Label { AutoSize = true, Text = "Адрес и окна доступа сохраняются без перезапуска. Для изменения сети/правил сначала восстановите прежнюю политику." });
+        Button(settingsActions, T("Расширенные настройки (JSON)…", "Advanced settings (JSON)…"), EditJsonConfig);
+        settings.Controls.Add(new Label { AutoSize = true, Text = T("Адрес и окна доступа сохраняются без перезапуска. Для изменения сети/правил сначала восстановите прежнюю политику.", "You can save the address and access windows without restarting. Restore the existing policy before changing network or firewall rules.") });
         void Dirty() { if (!loadingSettings) settingsDirty = true; }
         serverAddress.TextChanged += (_, _) => Dirty(); trusted.TextChanged += (_, _) => Dirty(); port.ValueChanged += (_, _) => Dirty();
         duration.Changed += Dirty; maximumDuration.Changed += Dirty;
-        var journal = Page(tabs, "Журнал");
+        var journal = Page(tabs, T("Журнал", "Journal"));
         var journalTools = Row(journal);
-        Button(journalTools, "Обновить журнал", RefreshJournal);
+        Button(journalTools, T("Обновить журнал", "Refresh journal"), RefreshJournal);
         journal.Controls.Add(journalStatus);
         events.Height = 440;
         events.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
@@ -204,19 +253,20 @@ internal sealed class MainForm : Form
         var bottom = new StatusStrip { SizingGrip = false };
         bottom.Items.Add(message);
         Controls.Add(tabs); Controls.Add(bottom);
+        if (showSettings && settings.Parent is TabPage settingsTab) tabs.SelectedTab = settingsTab;
         Shown += async (_, _) => await Guard(RefreshData);
         tabs.SelectedIndexChanged += async (_, _) =>
         {
             if (busy) return;
-            if (tabs.SelectedTab?.Text == "Настройки") await Guard(RefreshData);
-            if (tabs.SelectedTab?.Text == "Журнал") await Guard(RefreshJournal);
+            if (settings.Parent == tabs.SelectedTab) await Guard(RefreshData);
+            if (journal.Parent == tabs.SelectedTab) await Guard(RefreshJournal);
         };
         timer.Tick += async (_, _) => await RefreshInBackground();
         timer.Start();
         countdown.Tick += (_, _) => UpdateCountdown();
         RefreshOverviewActions();
         RefreshClientActions();
-        FormClosing += (_, e) => { if (settingsDirty && !Confirm("Закрыть окно без сохранения настроек?")) e.Cancel = true; };
+        FormClosing += (_, e) => { if (settingsDirty && !Confirm(T("Закрыть окно без сохранения настроек?", "Close the window without saving your settings?"))) e.Cancel = true; };
         FormClosed += (_, _) => { timer.Dispose(); countdown.Dispose(); backgroundRefresh?.Cancel(); };
     }
     private static NumericUpDown Number(int min, int max, int value) => new() { Minimum = min, Maximum = max, Value = value, Width = 150 };
@@ -270,7 +320,7 @@ internal sealed class MainForm : Form
     {
         var button = Button(parent, caption, async () =>
         {
-            ShowOperation(title, Notice.Working, "Ожидаем завершения операции…");
+            ShowOperation(title, Notice.Working, T("Ожидаем завершения операции…", "Waiting for the operation to finish…"));
             try
             {
                 var (state, detail) = await action();
@@ -313,12 +363,12 @@ internal sealed class MainForm : Form
         if (remaining > TimeSpan.Zero)
         {
             int seconds = (int)Math.Ceiling(remaining.TotalSeconds);
-            confirmation.Text = $"До окончания подтверждения {seconds / 60:00}:{seconds % 60:00}\nВойдите в новый RDP-сеанс с адреса из белого списка. В нём откройте portGate и подтвердите вход.";
+            confirmation.Text = T($"До окончания подтверждения {seconds / 60:00}:{seconds % 60:00}\nВойдите в новый RDP-сеанс с адреса из белого списка. В нём откройте portGate и подтвердите вход.", $"Confirmation expires in {seconds / 60:00}:{seconds % 60:00}\nOpen a new RDP session from an allowlisted address. Open portGate in that session and confirm the sign-in.");
             if (!countdown.Enabled) countdown.Start();
         }
         else
         {
-            confirmation.Text = "Время подтверждения истекло. Ожидается обновление состояния правил.";
+            confirmation.Text = T("Время подтверждения истекло. Ожидается обновление состояния правил.", "The confirmation window expired. Waiting for firewall status to refresh.");
             countdown.Stop();
         }
         RefreshOverviewActions();
@@ -327,14 +377,14 @@ internal sealed class MainForm : Form
     {
         string label = state switch
         {
-            Notice.Working => "Выполняется",
-            Notice.Success => "Готово",
-            Notice.Attention => "Требуется внимание",
-            Notice.Error => "Ошибка",
-            _ => "Отменено"
+            Notice.Working => T("Выполняется", "Working"),
+            Notice.Success => T("Готово", "Done"),
+            Notice.Attention => T("Требуется внимание", "Attention required"),
+            Notice.Error => T("Ошибка", "Error"),
+            _ => T("Отменено", "Cancelled")
         };
         operationTitle.Text = $"{label} — {title} · {DateTime.Now:HH:mm:ss}";
-        operationDetail.Text = detail;
+        operationDetail.Text = DisplayDetail(detail);
         operationTitle.ForeColor = state switch
         {
             Notice.Success => StatusColor(Color.DarkGreen),
@@ -347,17 +397,18 @@ internal sealed class MainForm : Form
     private async Task<FirewallPlan> ReadPlan()
     {
         latestPlan = null;
-        planSummary.Text = "Проверяются действующие правила брандмауэра…";
+        planSummary.Text = T("Проверяются действующие правила брандмауэра…", "Checking active firewall rules…");
         FirewallPlan result;
         try { result = Json.Read<FirewallPlan>(await Request("plan")); }
         catch
         {
-            planSummary.Text = "План недоступен. Подробности ошибки показаны в результате операции.";
+            planSummary.Text = T("План недоступен. Подробности ошибки показаны в результате операции.", "The plan is unavailable. See the operation result for details.");
             throw;
         }
         latestPlan = result;
-        planSummary.Text = $"{(result.Safe ? "План готов" : "Обнаружены конфликты")} · порт RDP {result.RdpPort}\n" +
-            $"Правил к отключению: {result.Disable.Count}   •   Предупреждений: {result.Warnings.Count}   •   Конфликтов: {result.Conflicts.Count}";
+        planSummary.Text = (result.Safe ? T("План готов", "Plan ready") : T("Обнаружены конфликты", "Conflicts found")) +
+            T($" · порт RDP {result.RdpPort}\n", $" · RDP port {result.RdpPort}\n") +
+            T($"Правил к отключению: {result.Disable.Count}   •   Предупреждений: {result.Warnings.Count}   •   Конфликтов: {result.Conflicts.Count}", $"Rules to disable: {result.Disable.Count}   •   Warnings: {result.Warnings.Count}   •   Conflicts: {result.Conflicts.Count}");
         planSummary.ForeColor = result.Safe ? SystemColors.ControlText : StatusColor(Color.DarkRed);
         return result;
     }
@@ -365,7 +416,7 @@ internal sealed class MainForm : Form
     {
         using var dialog = new Form
         {
-            Text = confirmApply ? "Проверка перед применением защиты" : "Подробности плана брандмауэра",
+            Text = confirmApply ? T("Проверка перед применением защиты", "Review before applying protection") : T("Подробности плана брандмауэра", "Firewall plan details"),
             ShowInTaskbar = false, Font = Font, AutoScaleMode = AutoScaleMode.Dpi,
             ClientSize = new Size(710, 440), MinimumSize = new Size(500, 320),
             StartPosition = FormStartPosition.CenterParent, MinimizeBox = false, MaximizeBox = false
@@ -378,26 +429,26 @@ internal sealed class MainForm : Form
             tabs.TabPages.Add(page);
         }
         string intro = confirmApply
-            ? "После проверки правил откройте новый RDP-сеанс с адреса из белого списка. На подтверждение даётся 120 секунд. По истечении времени прежние правила будут восстановлены."
-            : $"Порт RDP: {snapshot.RdpPort}";
+            ? T("После проверки правил откройте новый RDP-сеанс с адреса из белого списка. На подтверждение даётся 120 секунд. По истечении времени прежние правила будут восстановлены.", "After reviewing the rules, open a new RDP session from an allowlisted address. You have 120 seconds to confirm. The previous rules will be restored if time expires.")
+            : T($"Порт RDP: {snapshot.RdpPort}", $"RDP port: {snapshot.RdpPort}");
         string Section(string title, IEnumerable<string> lines)
         {
-            string items = string.Join("\r\n", lines.Select(line => "• " + line));
-            return $"{title}\r\n{(items.Length == 0 ? "Нет." : items)}";
+            string items = string.Join("\r\n", lines.Select(line => "• " + DisplayDetail(line)));
+            return $"{title}\r\n{(items.Length == 0 ? T("Нет.", "None.") : items)}";
         }
-        AddDetail("Сводка", string.Join("\r\n\r\n", intro,
-            Section("Конфликты", snapshot.Conflicts),
-            Section("Предупреждения", snapshot.Warnings),
-            Section("Будут отключены", snapshot.Disable.Select(rule =>
-                $"{rule.Name} · {rule.Identity} · {(rule.Protocol == 6 ? "TCP" : rule.Protocol == 17 ? "UDP" : "протокол " + rule.Protocol)} {rule.Ports}"))), wrap: true);
-        AddDetail("Технические данные (JSON)", Json.Write(snapshot), wrap: false);
+        AddDetail(T("Сводка", "Summary"), string.Join("\r\n\r\n", intro,
+            Section(T("Конфликты", "Conflicts"), snapshot.Conflicts),
+            Section(T("Предупреждения", "Warnings"), snapshot.Warnings),
+            Section(T("Будут отключены", "Rules to disable"), snapshot.Disable.Select(rule =>
+                $"{rule.Name} · {rule.Identity} · {(rule.Protocol == 6 ? "TCP" : rule.Protocol == 17 ? "UDP" : T("протокол ", "protocol ") + rule.Protocol)} {rule.Ports}"))), wrap: true);
+        AddDetail(T("Технические данные (JSON)", "Technical data (JSON)"), Json.Write(snapshot), wrap: false);
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(8), WrapContents = false };
-        var close = new Button { Text = confirmApply ? "Отмена" : "Закрыть", AutoSize = true, DialogResult = DialogResult.Cancel };
+        var close = new Button { Text = confirmApply ? T("Отмена", "Cancel") : T("Закрыть", "Close"), AutoSize = true, DialogResult = DialogResult.Cancel };
         buttons.Controls.Add(close);
         dialog.CancelButton = close;
         if (confirmApply)
         {
-            var apply = new Button { Text = "Применить защиту", AutoSize = true, DialogResult = DialogResult.OK };
+            var apply = new Button { Text = T("Применить защиту", "Apply protection"), AutoSize = true, DialogResult = DialogResult.OK };
             buttons.Controls.Add(apply);
         }
         dialog.Controls.Add(tabs);
@@ -414,24 +465,24 @@ internal sealed class MainForm : Form
         }
         catch (Exception e)
         {
-            return (Notice.Attention, $"Команда завершилась, но подтвердить состояние службы не удалось. {e.Message}");
+            return (Notice.Attention, T($"Команда завершилась, но подтвердить состояние службы не удалось. {DisplayDetail(e.Message)}", $"The command finished, but the service status could not be verified. {DisplayDetail(e.Message)}"));
         }
-        if (expected == "Installed" && actual == "Running") return (Notice.Success, "Служба обновлена и работает.");
+        if (expected == "Installed" && actual == "Running") return (Notice.Success, T("Служба обновлена и работает.", "The service was updated and is running."));
         return actual == expected || expected == "Installed" && actual == "Stopped"
             ? (Notice.Success, success)
-            : (Notice.Attention, $"Команда завершилась. Текущее состояние службы: {ServiceLabel(actual)}.");
+            : (Notice.Attention, T($"Команда завершилась. Текущее состояние службы: {ServiceLabel(actual)}.", $"The command finished. Current service status: {ServiceLabel(actual)}."));
     }
     private static string ServiceLabel(string state) => state switch
     {
-        "Running" => "Работает",
-        "Stopped" => "Остановлена",
-        "StartPending" => "Запускается",
-        "StopPending" => "Останавливается",
-        "Paused" => "Приостановлена",
-        "PausePending" => "Приостанавливается",
-        "ContinuePending" => "Возобновляет работу",
-        "Не установлена" => "Не установлена",
-        _ => "Неизвестно"
+        "Running" => T("Работает", "Running"),
+        "Stopped" => T("Остановлена", "Stopped"),
+        "StartPending" => T("Запускается", "Starting"),
+        "StopPending" => T("Останавливается", "Stopping"),
+        "Paused" => T("Приостановлена", "Paused"),
+        "PausePending" => T("Приостанавливается", "Pausing"),
+        "ContinuePending" => T("Возобновляет работу", "Resuming"),
+        "Не установлена" => T("Не установлена", "Not installed"),
+        _ => T("Неизвестно", "Unknown")
     };
     private async Task RefreshInBackground()
     {
@@ -445,7 +496,7 @@ internal sealed class MainForm : Form
     }
     private void ShowRefreshError(Exception error)
     {
-        connectionStatus.Text = "Не удалось полностью обновить данные. " + error.Message;
+        connectionStatus.Text = T("Не удалось полностью обновить данные. ", "Some data could not be refreshed. ") + DisplayDetail(error.Message);
         connectionStatus.ForeColor = StatusColor(Color.DarkRed);
     }
     private async Task Guard(Func<Task> action)
@@ -456,7 +507,7 @@ internal sealed class MainForm : Form
         RefreshOverviewActions();
         RefreshClientActions();
         try { await action(); }
-        catch (Exception e) { message.Text = e.Message; MessageBox.Show(this, e.Message, "portGate", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+        catch (Exception e) { message.Text = DisplayDetail(e.Message); MessageBox.Show(this, message.Text, "portGate", MessageBoxButtons.OK, MessageBoxIcon.Error); }
         finally
         {
             busy = false;
@@ -468,7 +519,7 @@ internal sealed class MainForm : Form
     private static bool Confirm(string text) => MessageBox.Show(text, "portGate", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK;
     private static string? SelectedKey(DataGridView grid, string column) =>
         grid.SelectedRows.Count == 1 && grid.Columns.Contains(column) ? grid.SelectedRows[0].Cells[column].Value?.ToString() : null;
-    private string SelectedId() => SelectedKey(clients, "id") ?? throw new InvalidOperationException("Выберите клиента.");
+    private string SelectedId() => SelectedKey(clients, "id") ?? throw new InvalidOperationException(T("Выберите клиента.", "Select a client."));
     private static string HostPath(bool installing = false)
     {
         string path = Path.Combine(AppContext.BaseDirectory, Deployment.PackagedHostName);
@@ -476,7 +527,7 @@ internal sealed class MainForm : Form
             .Equals(Path.GetDirectoryName(Deployment.InstalledHost), StringComparison.OrdinalIgnoreCase);
         if ((!installing || runningFromInstalledDirectory) && File.Exists(Deployment.InstalledHost))
             return Deployment.InstalledHost;
-        if (!File.Exists(path)) throw new FileNotFoundException("portGate.Host.exe должен находиться рядом с панелью. Используйте папку опубликованной поставки.");
+        if (!File.Exists(path)) throw new FileNotFoundException(T("portGate.Host.exe должен находиться рядом с панелью. Используйте папку опубликованной поставки.", "portGate.Host.exe must be available next to the panel. Use the folder from the release archive."));
         return path;
     }
     private async Task<string> Local(string command, params string[] args) => await Task.Run(() => Native.Run(HostPath(command == "install"), new[] { command }.Concat(args), 180000));
@@ -510,18 +561,18 @@ internal sealed class MainForm : Form
     {
         if (settingsDirty)
         {
-            MessageBox.Show(this, "Сохраните или отмените изменения формы, затем откройте JSON.", "Настройки", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, T("Сохраните или отмените изменения формы, затем откройте JSON.", "Save or discard the form changes before opening JSON."), T("Настройки", "Settings"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
         string json = await Request("config");
-        using var dialog = new Form { Text = "Расширенные настройки (JSON)", Size = new Size(760, 520), StartPosition = FormStartPosition.CenterParent, AutoScaleMode = AutoScaleMode.Dpi };
+        using var dialog = new Form { Text = T("Расширенные настройки (JSON)", "Advanced settings (JSON)"), Size = new Size(760, 520), StartPosition = FormStartPosition.CenterParent, AutoScaleMode = AutoScaleMode.Dpi };
         bool readOnly = policyConfigured != false;
         var editor = new TextBox { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Both, WordWrap = false, ReadOnly = readOnly, Text = json };
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, Padding = new Padding(8) };
-        var close = new Button { Text = "Закрыть", AutoSize = true, DialogResult = DialogResult.Cancel };
+        var close = new Button { Text = T("Закрыть", "Close"), AutoSize = true, DialogResult = DialogResult.Cancel };
         if (!readOnly)
         {
-            var save = new Button { Text = "Сохранить JSON", AutoSize = true };
+            var save = new Button { Text = T("Сохранить JSON", "Save JSON"), AutoSize = true };
             save.Click += async (_, _) =>
             {
                 save.Enabled = close.Enabled = false;
@@ -529,12 +580,12 @@ internal sealed class MainForm : Form
                 {
                     var next = Json.Read<Config>(editor.Text);
                     next.Validate();
-                    message.Text = await Request("config-save", Json.Write(next));
+                    message.Text = DisplayDetail(await Request("config-save", Json.Write(next)));
                     dialog.DialogResult = DialogResult.OK;
                 }
                 catch (Exception error)
                 {
-                    MessageBox.Show(dialog, error.Message, "Настройки не сохранены", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show(dialog, DisplayDetail(error.Message), T("Настройки не сохранены", "Settings could not be saved"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
                 finally { save.Enabled = close.Enabled = true; }
             };
@@ -551,9 +602,9 @@ internal sealed class MainForm : Form
     {
         string output = await Local("events");
         var table = new System.Data.DataTable();
-        table.Columns.Add("Время");
-        table.Columns.Add("Событие");
-        table.Columns.Add("Подробности");
+        table.Columns.Add(T("Время", "Time"));
+        table.Columns.Add(T("Событие", "Event"));
+        table.Columns.Add(T("Подробности", "Details"));
         foreach (string line in output.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Reverse())
         {
             if (line == "Событий нет.") continue;
@@ -565,34 +616,34 @@ internal sealed class MainForm : Form
                 string? kind = root.GetProperty("kind").GetString();
                 string? detail = root.GetProperty("detail").GetString();
                 table.Rows.Add(DateTimeOffset.TryParse(date, out var time) ? time.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss") : date,
-                    JournalEvent(kind), detail);
+                    JournalEvent(kind), detail is null ? null : DisplayDetail(detail));
             }
             catch (Exception error) when (error is JsonException or InvalidOperationException or KeyNotFoundException)
             {
-                table.Rows.Add("", "Не удалось прочитать запись", line);
+                table.Rows.Add("", T("Не удалось прочитать запись", "Could not read entry"), line);
             }
         }
         events.DataSource = table;
         events.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.DisplayedCells;
         events.Columns[1].AutoSizeMode = DataGridViewAutoSizeColumnMode.DisplayedCells;
         events.Columns[2].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-        journalStatus.Text = table.Rows.Count == 0 ? "Событий пока нет." : $"Записей: {table.Rows.Count}. Сначала показаны новые.";
+        journalStatus.Text = table.Rows.Count == 0 ? T("Событий пока нет.", "No events yet.") : T($"Записей: {table.Rows.Count}. Сначала показаны новые.", $"{table.Rows.Count} entries. Newest first.");
     }
     private static string JournalEvent(string? name) => name switch
     {
-        "ServiceStarted" => "Служба запущена",
-        "ServiceStopped" => "Служба остановлена",
-        "ServiceFailed" => "Ошибка службы",
-        "AccessGranted" => "Доступ выдан",
-        "RequestFailed" => "Ошибка запроса",
-        "ClientRotated" => "Ключ перевыпущен",
-        "ClientRevoked" => "Клиент отозван",
-        "PolicyAppliedPending" => "Ожидает подтверждения",
-        "PolicyConfirmed" => "Защита подтверждена",
-        "PolicyRestored" => "Правила восстановлены",
-        "PolicyRestoreIncomplete" => "Откат требует внимания",
-        "ClockChanged" => "Изменилось системное время",
-        _ => name ?? "Событие"
+        "ServiceStarted" => T("Служба запущена", "Service started"),
+        "ServiceStopped" => T("Служба остановлена", "Service stopped"),
+        "ServiceFailed" => T("Ошибка службы", "Service error"),
+        "AccessGranted" => T("Доступ выдан", "Access granted"),
+        "RequestFailed" => T("Ошибка запроса", "Request failed"),
+        "ClientRotated" => T("Ключ перевыпущен", "Key rotated"),
+        "ClientRevoked" => T("Клиент отозван", "Client revoked"),
+        "PolicyAppliedPending" => T("Ожидает подтверждения", "Awaiting confirmation"),
+        "PolicyConfirmed" => T("Защита подтверждена", "Protection confirmed"),
+        "PolicyRestored" => T("Правила восстановлены", "Rules restored"),
+        "PolicyRestoreIncomplete" => T("Откат требует внимания", "Grant revoked"),
+        "ClockChanged" => T("Изменилось системное время", "Temporary grants revoked"),
+        _ => name ?? T("Событие", "Event")
     };
     private async Task<(string Service, string Protection)> RefreshStatus(CancellationToken token = default)
     {
@@ -612,23 +663,25 @@ internal sealed class MainForm : Form
                 confirmationWindow = null;
                 UpdateCountdown();
                 RefreshOverviewActions();
-                serviceStatus.Text = "Служба: состояние недоступно";
-                protectionStatus.Text = "Защита RDP: состояние недоступно";
+                serviceStatus.Text = T("Служба: состояние недоступно", "Service: status unavailable");
+                protectionStatus.Text = T("Защита RDP: состояние недоступно", "RDP protection: status unavailable");
                 serviceStatus.ForeColor = protectionStatus.ForeColor = StatusColor(Color.SaddleBrown);
             }
             throw;
         }
         using var doc = JsonDocument.Parse(text); var root = doc.RootElement;
         string service = root.GetProperty("service").GetString() ?? "";
-        string protection = root.GetProperty("protection").GetString() ?? "Неизвестно";
+        string protection = root.GetProperty("protection").GetString() ?? T("Неизвестно", "Unknown");
         currentService = service;
-        serviceStatus.Text = "Служба: " + ServiceLabel(service);
+        serviceStatus.Text = T("Служба: ", "Service: ") + ServiceLabel(service);
         serviceStatus.ForeColor = StatusColor(service == "Running" ? Color.DarkGreen : Color.SaddleBrown);
-        protectionStatus.Text = "Защита RDP: " + protection;
+        protectionStatus.Text = T("Защита RDP: ", "RDP protection: ") + DisplayDetail(protection);
         protectionStatus.ForeColor = StatusColor(protection == "RDP ограничен по IP" ? Color.DarkGreen
             : protection.StartsWith("Защита нарушена", StringComparison.Ordinal) || protection.StartsWith("Откат не завершён", StringComparison.Ordinal) ? Color.DarkRed : Color.SaddleBrown);
         connectionStatus.ForeColor = SystemColors.WindowText;
-        connectionStatus.Text = $"Порт авторизации: UDP {root.GetProperty("udpPort")} · Обновлено в {DateTime.Now:HH:mm:ss}";
+        var authorizationPort = root.GetProperty("udpPort");
+        connectionStatus.Text = T($"Порт авторизации: UDP {authorizationPort} · Обновлено в {DateTime.Now:HH:mm:ss}",
+            $"Authorization port: UDP {authorizationPort} · Updated at {DateTime.Now:HH:mm:ss}");
         awaitingConfirmation = root.TryGetProperty("pendingConfirmation", out var pending) && pending.GetBoolean();
         hasTrustedSources = root.TryGetProperty("hasTrustedSources", out var trustedSources) ? trustedSources.GetBoolean() : null;
         confirmationWindow = null;
@@ -648,11 +701,11 @@ internal sealed class MainForm : Form
         RefreshClientActions();
         trusted.ReadOnly = locked;
         port.Enabled = !locked;
-        trustedHint.Text = locked ? "Список используется действующей политикой. Чтобы изменить его, восстановите правила на вкладке «Обзор», затем примените защиту заново." : "";
+        trustedHint.Text = locked ? T("Список используется действующей политикой. Чтобы изменить его, восстановите правила на вкладке «Обзор», затем примените защиту заново.", "The active policy uses this list. To change it, restore the rules on Overview, then apply protection again.") : "";
         if (service == "Не установлена" && protection == "Не настроено")
-            connectionStatus.Text += "\nУстановите службу, задайте белый список и проверьте правила.";
+            connectionStatus.Text += T("\nУстановите службу, задайте белый список и проверьте правила.", "\nInstall the service, set the allowlist, and check the rules.");
         else if (!locked && hasTrustedSources == false)
-            connectionStatus.Text += "\nПеред применением защиты добавьте адрес администратора в белый список на вкладке «Настройки».";
+            connectionStatus.Text += T("\nПеред применением защиты добавьте адрес администратора в белый список на вкладке «Настройки».", "\nAdd an administrator address to the allowlist in Settings before applying protection.");
         return (service, protection);
     }
     private static void Populate(DataGridView grid, JsonElement array, ref string? previous)
@@ -676,20 +729,20 @@ internal sealed class MainForm : Form
             column.Visible = column.Name is not ("id" or "ruleId" or "clientId" or "enabled" or "created");
             column.HeaderText = column.Name switch
             {
-                "id" => "Идентификатор",
-                "clientId" => "Клиент",
-                "clientName" => "Клиент",
-                "name" => "Имя",
-                "ip" => "IP-адрес",
-                "lastIp" => "Последний IP",
-                "enabled" => "Активен",
-                "active" => "Активен",
-                "expires" => "Действует до",
-                "created" => "Дата создания",
-                "lastRequest" => "Последний запрос",
-                "leaseSeconds" => "Окно доступа",
-                "ruleId" => "Правило",
-                "phase" => "Состояние",
+                "id" => T("Идентификатор", "ID"),
+                "clientId" => T("Клиент", "Client"),
+                "clientName" => T("Клиент", "Client"),
+                "name" => T("Имя", "Name"),
+                "ip" => T("IP-адрес", "IP address"),
+                "lastIp" => T("Последний IP", "Last IP"),
+                "enabled" => T("Активен", "Active"),
+                "active" => T("Активен", "Active"),
+                "expires" => T("Действует до", "Valid until"),
+                "created" => T("Дата создания", "Created"),
+                "lastRequest" => T("Последний запрос", "Last request"),
+                "leaseSeconds" => T("Окно доступа", "Access window"),
+                "ruleId" => T("Правило", "Rule"),
+                "phase" => T("Состояние", "Status"),
                 _ => column.Name
             };
         }
@@ -709,12 +762,12 @@ internal sealed class MainForm : Form
     }
     private static string FormatCell(JsonProperty property)
     {
-        if (property.Name == "phase") return property.Value.GetString() switch { "Committed" => "Активно", "Prepared" => "Подготовка", _ => "Неизвестно" };
+        if (property.Name == "phase") return property.Value.GetString() switch { "Committed" => T("Активно", "Active"), "Prepared" => T("Подготовка", "Preparing"), _ => T("Неизвестно", "Unknown") };
         if (property.Name == "leaseSeconds" && property.Value.TryGetInt32(out int seconds))
-            return string.Join(" ", new[] { seconds / 3600 > 0 ? $"{seconds / 3600} ч" : "", seconds % 3600 / 60 > 0 ? $"{seconds % 3600 / 60} мин" : "", seconds % 60 > 0 ? $"{seconds % 60} с" : "" }.Where(part => part.Length > 0));
+            return string.Join(" ", new[] { seconds / 3600 > 0 ? T($"{seconds / 3600} ч", $"{seconds / 3600} h") : "", seconds % 3600 / 60 > 0 ? T($"{seconds % 3600 / 60} мин", $"{seconds % 3600 / 60} min") : "", seconds % 60 > 0 ? T($"{seconds % 60} с", $"{seconds % 60} s") : "" }.Where(part => part.Length > 0));
         if (property.Value.ValueKind == JsonValueKind.Null) return "—";
         if (property.Value.ValueKind is JsonValueKind.True or JsonValueKind.False)
-            return property.Value.GetBoolean() ? "Да" : "Нет";
+            return property.Value.GetBoolean() ? T("Да", "Yes") : T("Нет", "No");
         if (property.Name is "expires" or "created" or "lastRequest" &&
             property.Value.ValueKind == JsonValueKind.String && property.Value.TryGetDateTimeOffset(out var date))
             return date.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
@@ -729,7 +782,7 @@ internal sealed class MainForm : Form
         if (path == null) return;
         string id = AccessExport.ParseClientId(await Request("clients-create", dialog.ClientName, dialog.Seconds.ToString(), dialog.Expiry));
         try { await SaveScript(id, dialog.Server, path, dialog.LaunchRdp); }
-        catch (Exception e) { throw new IOException("Клиент создан, но скрипт не сохранён. Выберите клиента и нажмите «Сохранить скрипт». " + e.Message, e); }
+        catch (Exception e) { throw new IOException(T("Клиент создан, но скрипт не сохранён. Выберите клиента и нажмите «Сохранить скрипт». ", "The client was created, but the script could not be saved. Select the client and choose Save script. ") + e.Message, e); }
         finally { await RefreshData(); }
     }
 
@@ -738,10 +791,10 @@ internal sealed class MainForm : Form
         bool mac = platform == ClientPlatform.MacOS;
         using var save = new SaveFileDialog
         {
-            Title = mac ? "Сохранить скрипт для macOS" : "Сохранить скрипт для Windows",
+            Title = mac ? T("Сохранить скрипт для macOS", "Save macOS script") : T("Сохранить скрипт для Windows", "Save Windows script"),
             Filter = mac
-                ? "AppleScript для macOS (*.applescript)|*.applescript"
-                : "Windows — двойной щелчок (*.bat)|*.bat|PowerShell — для администратора (*.ps1)|*.ps1",
+                ? T("AppleScript для macOS (*.applescript)|*.applescript", "AppleScript for macOS (*.applescript)|*.applescript")
+                : T("Windows — двойной щелчок (*.bat)|*.bat|PowerShell — для администратора (*.ps1)|*.ps1", "Windows double-click script (*.bat)|*.bat|PowerShell for administrators (*.ps1)|*.ps1"),
             FileName = "portGate-Access",
             OverwritePrompt = true,
             AddExtension = true,
@@ -754,8 +807,8 @@ internal sealed class MainForm : Form
             bool valid = mac ? extension == ".applescript" : extension is ".bat" or ".ps1";
             if (valid) return;
             e.Cancel = true;
-            MessageBox.Show(this, mac ? "Укажите расширение .applescript." : "Укажите расширение .bat или .ps1.",
-                "Формат скрипта", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, mac ? T("Укажите расширение .applescript.", "Use the .applescript extension.") : T("Укажите расширение .bat или .ps1.", "Use the .bat or .ps1 extension."),
+                T("Формат скрипта", "Script format"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
         };
         return save.ShowDialog(this) == DialogResult.OK ? save.FileName : null;
     }
@@ -770,16 +823,16 @@ internal sealed class MainForm : Form
     private async Task SaveScript(string id, string server, string path, bool launch)
     {
         await Local("clients", "export", AccessExport.ParseClientId(id), server, path, launch ? "true" : "false");
-        if (!File.Exists(path)) throw new IOException("Скрипт не был сохранён: " + path);
-        message.Text = "Скрипт сохранён: " + path;
+        if (!File.Exists(path)) throw new IOException(T("Скрипт не был сохранён: ", "The script could not be saved: ") + path);
+        message.Text = T("Скрипт сохранён: ", "Script saved: ") + path;
         if (Path.GetExtension(path).Equals(".applescript", StringComparison.OrdinalIgnoreCase))
         {
-            MessageBox.Show(this, $"Скрипт сохранён:\n{path}\n\n{ClientDialog.MacHelp}\n\nФайл содержит персональный ключ доступа.",
-                "Скрипт для macOS", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, T($"Скрипт сохранён:\n{path}\n\n{ClientDialog.MacHelp}\n\nФайл содержит персональный ключ доступа.", $"Script saved:\n{path}\n\n{ClientDialog.MacHelp}\n\nThe file contains a personal access key."),
+                T("Скрипт для macOS", "macOS script"), MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         else
         {
-            message.Text += ". Файл содержит персональный ключ доступа.";
+            message.Text += T(". Файл содержит персональный ключ доступа.", ". The file contains a personal access key.");
         }
     }
 }
@@ -788,13 +841,13 @@ internal enum ClientPlatform { Windows, MacOS }
 
 internal sealed class ClientDialog : Form
 {
-    internal const string MacHelp = "На Mac откройте .applescript в Редакторе скриптов, затем нажмите «Выполнить». Чтобы получить .scpt, сохраните файл на Mac в формате «Скрипт».";
-    private readonly TextBox name = new() { Width = 340, Text = "Пользователь" };
+    internal static string MacHelp => T("На Mac откройте .applescript в Редакторе скриптов, затем нажмите «Выполнить». Чтобы получить .scpt, сохраните файл на Mac в формате «Скрипт».", "On the Mac, open the .applescript in Script Editor and select Run. To get a .scpt file, save it on the Mac in Script format.");
+    private readonly TextBox name = new() { Width = 340, Text = T("Пользователь", "User") };
     private readonly TextBox server = new() { Width = 340 };
     private readonly DurationInput duration = new(300);
-    private readonly CheckBox limited = new() { AutoSize = true, Text = "Ограничить срок действия ключа" };
+    private readonly CheckBox limited = new() { AutoSize = true, Text = T("Ограничить срок действия ключа", "Set an expiry date for the key") };
     private readonly DateTimePicker expiry = new() { Value = DateTime.Now.AddMonths(1), Format = DateTimePickerFormat.Short };
-    private readonly CheckBox launch = new() { AutoSize = true, Text = "Запустить RDP после авторизации" };
+    private readonly CheckBox launch = new() { AutoSize = true, Text = T("Запустить RDP после авторизации", "Start RDP after authorization") };
     private readonly ComboBox platform = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 340 };
     public string ClientName => name.Text.Trim(); public string Server => server.Text.Trim(); public int Seconds => duration.Seconds;
     public string Expiry => limited.Checked ? new DateTimeOffset(expiry.Value.Date.AddDays(1)).ToUniversalTime().ToString("O") : "";
@@ -804,7 +857,7 @@ internal sealed class ClientDialog : Form
     {
         server.Text = config.ServerAddress; duration.Seconds = existing?.LeaseSeconds ?? config.LeaseSeconds;
         if (existing != null) { name.Text = existing.Name; limited.Checked = existing.Expires != null; if (existing.Expires != null) expiry.Value = existing.Expires.Value.LocalDateTime.Date.AddDays(-1); }
-        Text = exportOnly ? "Сохранить скрипт доступа" : export ? "Создать клиента доступа" : "Изменить клиента доступа";
+        Text = exportOnly ? T("Сохранить скрипт доступа", "Save access script") : export ? T("Создать клиента доступа", "Create access client") : T("Изменить клиента доступа", "Edit access client");
         ClientSize = new Size(470, export ? (exportOnly ? 330 : 500) : 280);
         Font = new Font("Segoe UI", 10);
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -815,12 +868,12 @@ internal sealed class ClientDialog : Form
         var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(15) };
         platform.Items.AddRange(["Windows", "macOS"]);
         platform.SelectedIndex = 0;
-        if (!exportOnly) { panel.Controls.Add(new Label { Text = "Название клиента", AutoSize = true }); panel.Controls.Add(name); panel.Controls.Add(new Label { Text = "Окно доступа (можно выбрать часы)", AutoSize = true }); panel.Controls.Add(duration); }
+        if (!exportOnly) { panel.Controls.Add(new Label { Text = T("Название клиента", "Client name"), AutoSize = true }); panel.Controls.Add(name); panel.Controls.Add(new Label { Text = T("Окно доступа (можно выбрать часы)", "Access window (you can choose hours)"), AutoSize = true }); panel.Controls.Add(duration); }
         if (export)
         {
-            panel.Controls.Add(new Label { Text = "IP или DNS сервера", AutoSize = true });
+            panel.Controls.Add(new Label { Text = T("IP или DNS сервера", "Server IP address or DNS name"), AutoSize = true });
             panel.Controls.Add(server);
-            panel.Controls.Add(new Label { Text = "Платформа скрипта", AutoSize = true, Margin = new Padding(3, 8, 3, 0) });
+            panel.Controls.Add(new Label { Text = T("Платформа скрипта", "Script platform"), AutoSize = true, Margin = new Padding(3, 8, 3, 0) });
             panel.Controls.Add(platform);
             var platformHelp = new Label { AutoSize = true, MaximumSize = new Size(400, 0) };
             panel.Controls.Add(platformHelp);
@@ -829,7 +882,7 @@ internal sealed class ClientDialog : Form
             {
                 bool mac = Platform == ClientPlatform.MacOS;
                 launch.Visible = !mac;
-                platformHelp.Text = mac ? MacHelp : "Выберите .bat для запуска двойным щелчком или .ps1 для Windows PowerShell.";
+                platformHelp.Text = mac ? MacHelp : T("Выберите .bat для запуска двойным щелчком или .ps1 для Windows PowerShell.", "Choose .bat for double-click use or .ps1 for Windows PowerShell.");
             }
             platform.SelectedIndexChanged += (_, _) => UpdatePlatform();
             UpdatePlatform();
@@ -841,15 +894,15 @@ internal sealed class ClientDialog : Form
             expiry.Enabled = limited.Checked;
             limited.CheckedChanged += (_, _) => expiry.Enabled = limited.Checked;
         }
-        var ok = new Button { Text = export ? "Выбрать файл…" : "Сохранить", AutoSize = true };
-        var cancel = new Button { Text = "Отмена", AutoSize = true, DialogResult = DialogResult.Cancel };
+        var ok = new Button { Text = export ? T("Выбрать файл…", "Choose file…") : T("Сохранить", "Save"), AutoSize = true };
+        var cancel = new Button { Text = T("Отмена", "Cancel"), AutoSize = true, DialogResult = DialogResult.Cancel };
         ok.Click += (_, _) => {
             try {
-                if (!exportOnly && ClientName.Length is < 1 or > 100) throw new ArgumentException("Введите имя клиента длиной от 1 до 100 символов.");
+                if (!exportOnly && ClientName.Length is < 1 or > 100) throw new ArgumentException(T("Введите имя клиента длиной от 1 до 100 символов.", "Enter a client name of 1 to 100 characters."));
                 if (export) AccessExport.ValidateServer(Server);
-                if (!exportOnly && (Seconds < 30 || Seconds > config.MaxLeaseSeconds)) throw new ArgumentException("Окно должно быть от 30 секунд до " + config.MaxLeaseSeconds / 3600m + " ч. Максимум изменяется в настройках.");
+                if (!exportOnly && (Seconds < 30 || Seconds > config.MaxLeaseSeconds)) throw new ArgumentException(T("Окно должно быть от 30 секунд до ", "The access window must be between 30 seconds and ") + config.MaxLeaseSeconds / 3600m + T(" ч. Максимум изменяется в настройках.", " hours. You can change the maximum in Settings."));
                 DialogResult = DialogResult.OK; Close();
-            } catch (ArgumentException e) { MessageBox.Show(this, e.Message, "Проверьте настройки клиента", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+            } catch (ArgumentException e) { MessageBox.Show(this, DisplayDetail(e.Message), T("Проверьте настройки клиента", "Check client settings"), MessageBoxButtons.OK, MessageBoxIcon.Warning); }
         };
         var buttons = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 10, 0, 0) };
         buttons.Controls.AddRange([ok, cancel]);
@@ -890,7 +943,7 @@ internal sealed class DurationInput : FlowLayoutPanel
 
     public DurationInput(int seconds)
     {
-        AutoSize = true; WrapContents = false; unit.Items.AddRange(["секунд", "минут", "часов"]); Controls.Add(value); Controls.Add(unit);
+        AutoSize = true; WrapContents = false; unit.Items.AddRange([T("секунд", "seconds"), T("минут", "minutes"), T("часов", "hours")]); Controls.Add(value); Controls.Add(unit);
         unit.SelectedIndexChanged += (_, _) =>
         {
             int next = unit.SelectedIndex;
@@ -900,8 +953,8 @@ internal sealed class DurationInput : FlowLayoutPanel
             else
             {
                 SetDuration(current, selectedUnit);
-                MessageBox.Show(FindForm(), "Текущий срок нельзя точно выразить в выбранных единицах. Измените значение в текущих единицах или оставьте его прежним.",
-                    "Длительность доступа", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(FindForm(), T("Текущий срок нельзя точно выразить в выбранных единицах. Измените значение в текущих единицах или оставьте его прежним.", "The current duration cannot be expressed exactly in the selected unit. Keep it as is or change the value in the current unit."),
+                    T("Длительность доступа", "Access duration"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         };
         value.ValueChanged += (_, _) => { if (!synchronizing) Changed?.Invoke(); };
