@@ -7,7 +7,7 @@ internal enum InterfaceLanguage { English, Russian }
 
 internal static class PanelLanguage
 {
-    private const string RegistryPath = @"Software\portGate";
+    private const string RegistryPath = @"Software\portgate";
     private const string Preference = "InterfaceLanguage";
 
     internal static InterfaceLanguage Current { get; private set; } = Read();

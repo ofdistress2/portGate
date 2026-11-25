@@ -31,19 +31,20 @@ try {
         if (Test-Path -LiteralPath $publishRoot) {
             Remove-Item -LiteralPath $publishRoot -Recurse -Force
         }
-        foreach ($project in @('portGate.Host','portGate.Manager')) {
-            & $Dotnet publish "src/$project/$project.csproj" -c Release -r win-x64 --self-contained $standalone -p:PublishSingleFile=false -o "$publishRoot/$project" --configfile NuGet.Config
+        foreach ($component in @('Host', 'Manager')) {
+            $project = "portGate.$component"
+            & $Dotnet publish "src/$project/$project.csproj" -c Release -r win-x64 --self-contained $standalone -p:PublishSingleFile=false -o (Join-Path $publishRoot "portgate.$component") --configfile NuGet.Config
             if ($LASTEXITCODE) { throw 'Ошибка публикации.' }
         }
 
-        $packageRoot = Join-Path $publishRoot 'portGate.Manager'
-        Copy-Item "$publishRoot/portGate.Host/*" $packageRoot -Recurse -Force
+        $packageRoot = Join-Path $publishRoot 'portgate.Manager'
+        Copy-Item "$publishRoot/portgate.Host/*" $packageRoot -Recurse -Force
         Copy-Item README.md,README.en.md,CONTRIBUTING.md,LICENSE,SECURITY.md $packageRoot -Force
         Copy-Item docs,licenses $packageRoot -Recurse -Force
         Get-ChildItem -LiteralPath $packageRoot -Filter '*.pdb' -File -Recurse | Remove-Item -Force
 
-        $dependencyPackages = foreach ($project in @('portGate.Host','portGate.Manager')) {
-            $dependencies = Get-Content -LiteralPath "$packageRoot/$project.deps.json" -Raw | ConvertFrom-Json
+        $dependencyPackages = foreach ($assembly in @('portgate.Host', 'portgate.Manager')) {
+            $dependencies = Get-Content -LiteralPath "$packageRoot/$assembly.deps.json" -Raw | ConvertFrom-Json
             foreach ($library in $dependencies.libraries.PSObject.Properties) {
                 if ($library.Value.type -eq 'package') { $library.Value.path }
                 if ($library.Value.type -eq 'runtimepack') {

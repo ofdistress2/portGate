@@ -19,7 +19,7 @@ public sealed class Store
     public IDisposable LockDeployment() => Acquire("deployment", 20);
     private IDisposable Acquire(string purpose, int seconds)
     {
-        var name = "Global\\KnockGate-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Root.ToUpperInvariant())))[..20];
+        var name = "Global\\portgate-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Root.ToUpperInvariant())))[..20];
         if (purpose != "store") name += "-" + purpose;
         var mutex = Native.SecureMutex(name);
         try { if (!mutex.WaitOne(TimeSpan.FromSeconds(seconds))) throw new TimeoutException("portGate занят другой операцией. Повторите попытку."); }

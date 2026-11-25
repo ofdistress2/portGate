@@ -6,8 +6,8 @@ namespace portGate.Host;
 public sealed class Administration(Engine engine, string executable)
 {
     public const string ServiceName = Deployment.ServiceName;
-    private const string CleanupTask = "KnockGate.Cleanup";
-    private const string RollbackTask = "KnockGate.Rollback";
+    private const string CleanupTask = "portgate.Cleanup";
+    private const string RollbackTask = "portgate.Rollback";
     private Store Store => engine.Store;
     private string? checkedGeneration;
     private string protection = "Проверка политики выполняется";
@@ -148,12 +148,12 @@ public sealed class Administration(Engine engine, string executable)
                 return false;
             }
         }
-        if (!Match("KG.Knock", 17, c.UdpPort.ToString(), c.AllowedKnockCidrs.Length == 0 ? "*" : string.Join(",", c.AllowedKnockCidrs))) return "Защита нарушена: правило авторизации изменено";
+        if (!Match("portgate.Authorization", 17, c.UdpPort.ToString(), c.AllowedKnockCidrs.Length == 0 ? "*" : string.Join(",", c.AllowedKnockCidrs))) return "Защита нарушена: правило авторизации изменено";
         foreach (int proto in c.AllowUdpRdp ? new[] { 6, 17 } : new[] { 6 })
-            if (!Match("KG.Trusted." + proto, proto, c.RdpPort.ToString(), string.Join(",", c.TrustedRdpCidrs))) return "Защита нарушена: белый список изменён";
+            if (!Match("portgate.Trusted." + proto, proto, c.RdpPort.ToString(), string.Join(",", c.TrustedRdpCidrs))) return "Защита нарушена: белый список изменён";
         // Every own permit must correspond to the current journal; extra own rules are also a drift.
-        var names = new HashSet<string> { "KG.Knock", "KG.Trusted.6" };
-        if (c.AllowUdpRdp) names.Add("KG.Trusted.17");
+        var names = new HashSet<string> { "portgate.Authorization", "portgate.Trusted.6" };
+        if (c.AllowUdpRdp) names.Add("portgate.Trusted.17");
         // A Prepared entry can remain briefly after grant creation failed and its rules were removed.
         // An actual leftover rule must still be caught as an unexpected owned rule.
         foreach (var lease in state.Leases.Where(lease => lease.Phase == "Committed"))
@@ -187,8 +187,8 @@ public sealed class Administration(Engine engine, string executable)
     {
         Store.RequireAdmin();
         string protectedRoot = Path.GetFullPath(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles)).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        if (!Path.GetFullPath(executable).StartsWith(protectedRoot, StringComparison.OrdinalIgnoreCase) || !Path.GetFileName(executable).Equals(Deployment.InstalledHostName, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Для установки запустите portGate.Host.exe из полностью распакованного релизного архива.");
+        if (!Path.GetFullPath(executable).StartsWith(protectedRoot, StringComparison.OrdinalIgnoreCase) || !Path.GetFileName(executable).Equals(Deployment.HostName, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Для установки запустите portgate.Host.exe из полностью распакованного релизного архива.");
         if (executable.Contains('"') || Store.Root.Contains('"')) throw new ArgumentException("Некорректный путь.");
         bool exists = System.ServiceProcess.ServiceController.GetServices().Any(s => s.ServiceName == ServiceName);
         Native.Run("sc.exe", [exists ? "config" : "create", ServiceName, "binPath=", $"\"{executable}\" service --data \"{Store.Root}\"", "start=", "auto", "obj=", "LocalSystem", "DisplayName=", "portGate RDP Gate"]);
@@ -205,7 +205,7 @@ public sealed class Administration(Engine engine, string executable)
         }
         if (restore) engine.Restore(); else
         {
-            engine.RevokeAll(); engine.Firewall.Remove("KG.Knock");
+            engine.RevokeAll(); engine.Firewall.Remove("portgate.Authorization");
             using var guard = Store.Lock(); var state = Store.Load();
             if (state.Migration is { Confirmed: false }) throw new InvalidOperationException("Сначала восстановите незавершённое применение.");
         }

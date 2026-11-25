@@ -20,7 +20,7 @@ public static class FirewallClassifier
             if (NonRdpTransports.Contains(rule.DynamicTransport, StringComparer.OrdinalIgnoreCase)) continue;
             if (!Any(rule.Service) && !rule.Service.Equals(Deployment.ServiceName, StringComparison.OrdinalIgnoreCase)) continue;
             string program = Environment.ExpandEnvironmentVariables(rule.Application).Trim();
-            if (!Any(program) && !Path.GetFileName(program).Equals(Deployment.InstalledHostName, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!Any(program) && !Path.GetFileName(program).Equals(Deployment.HostName, StringComparison.OrdinalIgnoreCase)) continue;
             if (rule.Package.Length != 0 && !Any(rule.Package) || rule.PackageFamilyName.Length != 0) continue;
             if (rule.Ports.Split(',').All(port => MatchPort(port.Trim(), config.UdpPort) == PortMatch.No)) continue;
             var blocked = ParseRemoteAddresses(rule.Remote);
