@@ -12,6 +12,16 @@ After verifying the response, portGate adds a temporary Windows Firewall rule fo
 - **Windows access passes** use `.bat` or `.ps1` with Windows PowerShell 5.1. **macOS access passes** use a personal `.applescript` or a `.scpt` saved from it. Each exported file contains an access key.
 - **[Download portGate for Windows x64](https://github.com/ofdistress2/portGate/releases/latest).** The self-contained build includes the .NET runtime.
 
+## Screenshots
+
+**Overview** shows the service status, RDP protection status, and temporary access grants.
+
+![portGate Overview showing RDP protection and temporary access grants](docs/images/overview.png)
+
+| Create a client access pass | Settings |
+| --- | --- |
+| [![portGate Create access client dialog](docs/images/clients.png)](docs/images/clients.png) | [![portGate language, UDP port, and allowlist settings](docs/images/settings.png)](docs/images/settings.png) |
+
 ## Install
 
 1. Arrange console access to the server and a way to restore the original firewall rules. For a VM, take a snapshot.
