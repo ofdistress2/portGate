@@ -1,17 +1,19 @@
-# portGate 1.0.13
+# portGate 1.0.14
 
-- Исполняемые файлы `portgate.Manager.exe` и `portgate.Host.exe`, служба Windows, системные папки и задачи используют имя `portgate`.
-- Служба устанавливается в `C:\Program Files\portgate`. Настройки, ключи и состояние хранятся в `%ProgramData%\portgate`.
+- Постоянный белый список RDP можно обновлять без перезапуска службы после первого подтверждения защиты. Временные разрешения сохраняются.
+- В панели появились боковая навигация, фильтры клиентов и журнала, обновлённые диалоги и масштабирование таблиц.
+- Из панели можно окончательно удалить ключ клиента и очистить текущие и архивные записи журнала.
 
-Для перехода с установленной службы `KnockGate` требуется перенос данных и повторное применение защиты. Подготовьте консольный доступ. Для новой установки распакуйте весь архив и запустите `portgate.Manager.exe`. [Руководство администратора](https://github.com/ofdistress2/portGate/blob/v1.0.13/docs/admin-guide.md)
+Для установки или обновления распакуйте весь архив и запустите `portgate.Manager.exe`. При переходе со старой службы `KnockGate` выполните перенос данных по руководству администратора. [Руководство администратора](https://github.com/ofdistress2/portGate/blob/v1.0.14/docs/admin-guide.md)
 
-Сверьте SHA-256 ZIP после скачивания. EXE без Authenticode-подписи.
+Сверьте SHA-256 ZIP после скачивания. Исполняемые файлы без подписи Authenticode.
 
 ## English
 
-- The executables, Windows service, installation and data folders, and scheduled tasks use the `portgate` name.
-- The service runs from `C:\Program Files\portgate`. Settings, keys, and state live in `%ProgramData%\portgate`.
+- Update the permanent RDP allowlist after confirming protection, without restarting the service. Existing temporary grants retain their expiry.
+- The management panel adds sidebar navigation, client and journal filters, refreshed dialogs, and DPI-aware table sizing.
+- Administrators can permanently delete a client key and clear current and archived journal entries from the panel.
 
-When upgrading from the old `KnockGate` service, migrate your data and reapply the firewall policy during a maintenance window with console access. For a fresh installation, extract the entire ZIP and run `portgate.Manager.exe`. [Administrator guide](https://github.com/ofdistress2/portGate/blob/v1.0.13/docs/admin-guide.en.md)
+To install or upgrade, extract the entire ZIP and run `portgate.Manager.exe`. When migrating from the older `KnockGate` service, follow the data migration steps in the guide. [Administrator guide](https://github.com/ofdistress2/portGate/blob/v1.0.14/docs/admin-guide.en.md)
 
 Verify the ZIP's SHA-256 after downloading. The executables are unsigned.

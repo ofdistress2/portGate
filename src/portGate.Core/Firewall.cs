@@ -38,6 +38,7 @@ public interface IFirewall
 {
     List<FirewallRule> Rules();
     void Put(FirewallRule rule);
+    void UpdateRemote(string name, string remote);
     void Remove(string name);
     void RemoveOwned(IEnumerable<string> names) { foreach (string name in names) Remove(name); }
     void Enable(string name, bool enabled);
@@ -50,6 +51,11 @@ public sealed class MemoryFirewall : IFirewall
     private readonly Dictionary<string, FirewallRule> rules = [];
     public List<FirewallRule> Rules() => rules.Values.ToList();
     public void Put(FirewallRule rule) => rules[rule.Identity] = rule;
+    public void UpdateRemote(string name, string remote)
+    {
+        var rule = rules.Values.Single(r => r.Group == WindowsFirewall.Group && r.Name == name);
+        rule.Remote = remote;
+    }
     public void Remove(string name) => rules.Remove(name);
     public void Enable(string name, bool enabled) => rules[name].Enabled = enabled;
     public FirewallPlan Plan(Config config) => new() { RdpPort = config.RdpPort == 0 ? 3389 : config.RdpPort, Disable = rules.Values.Where(r => r.Group != WindowsFirewall.Group && r.Enabled && r.Action == 1).ToList() };
@@ -72,6 +78,18 @@ public sealed class WindowsFirewall : IFirewall
         rule.Protocol = value.Protocol; rule.LocalPorts = value.Ports; rule.RemoteAddresses = value.Remote;
         rule.Direction = 1; rule.Action = 1; rule.Profiles = 7; rule.Enabled = true;
         Policy().Rules.Add(rule);
+    }
+    public void UpdateRemote(string name, string remote)
+    {
+        dynamic? match = null;
+        foreach (dynamic rule in Policy().Rules)
+        {
+            if (rule.Grouping != Group || (string)rule.Name != name) continue;
+            if (match != null) throw new InvalidOperationException("Неоднозначное правило portGate: " + name);
+            match = rule;
+        }
+        if (match == null) throw new InvalidOperationException("Правило portGate не найдено: " + name);
+        match.RemoteAddresses = remote;
     }
     public void Remove(string name)
     {

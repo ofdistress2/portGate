@@ -10,15 +10,21 @@ public sealed class Administration(Engine engine, string executable)
     private const string RollbackTask = "portgate.Rollback";
     private Store Store => engine.Store;
     private string? checkedGeneration;
+    private string[]? checkedAllowlist;
     private string protection = "Проверка политики выполняется";
     private DateTimeOffset? checkedAt;
     public bool RefreshHealth(CancellationToken cancellationToken = default)
     {
-        string? generation; using (Store.Lock()) generation = Store.Load().Migration?.Generation;
+        Migration? snapshot;
+        using (Store.Lock()) snapshot = Store.Load().Migration;
         string result = Health(cancellationToken);
         using var guard = Store.Lock();
-        if (Store.Load().Migration?.Generation != generation) return false;
-        protection = result; checkedGeneration = generation; checkedAt = DateTimeOffset.UtcNow;
+        var latest = Store.Load().Migration;
+        if (latest?.Generation != snapshot?.Generation ||
+            latest != null && !latest.Config.TrustedRdpCidrs.SequenceEqual(snapshot!.Config.TrustedRdpCidrs))
+            return false;
+        protection = result; checkedGeneration = latest?.Generation; checkedAllowlist = latest?.Config.TrustedRdpCidrs;
+        checkedAt = DateTimeOffset.UtcNow;
         return result == "RDP ограничен по IP";
     }
     public string Dispatch(string command, string[] args, int session, CancellationToken cancellationToken = default)
@@ -56,7 +62,11 @@ public sealed class Administration(Engine engine, string executable)
                 return client.Id;
             case "clients-revoke": engine.ChangeClient(args[0], false); return "Доступ отозван.";
             case "clients-rotate": engine.ChangeClient(args[0], true); return "Ключ перевыпущен. Старые скрипты недействительны.";
+            case "clients-delete": engine.DeleteClient(args[0]); return "Ключ удалён.";
+            case "events": return Store.ReadRecentEvents();
+            case "events-clear": Store.ClearEvents(); return "Журнал очищен.";
             case "clients-export": return ScriptExporter.Export(Store, args[0], args[1], args.Length > 2 && args[2] == "true", args.Length > 3 ? args[3] : "bat");
+            case "config-save": return SaveConfig(Json.Read<Config>(args[0]), cancellationToken);
         }
         using var guard = Store.Lock();
         switch (command)
@@ -72,6 +82,7 @@ public sealed class Administration(Engine engine, string executable)
                     serverId = config.ServerId, service = installed?.Status.ToString() ?? "Не установлена",
                     protection = health, healthCheckedAt = checkedAt, policyConfigured = state.Migration != null,
                     pendingConfirmation = state.Migration is { Confirmed: false, Applying: false, Restoring: false },
+                    allowlistEditable = state.Migration is null or { Confirmed: true, Applying: false, Restoring: false, RestoreProblems.Length: 0 },
                     rollbackAt = state.Migration?.RollbackAt, serverNow = DateTimeOffset.UtcNow,
                     hasTrustedSources = config.TrustedRdpCidrs.Length > 0,
                     udpPort = config.UdpPort, rdpPort = state.Migration?.Config.RdpPort,
@@ -80,28 +91,53 @@ public sealed class Administration(Engine engine, string executable)
                 });
             }
             case "config": return Json.Write(Store.Config());
-            case "config-save":
-                var next = Json.Read<Config>(args[0]); next.Validate();
-                var previous = Store.Config();
-                var current = Store.Load();
-                var permitted = Json.Read<Config>(Json.Write(previous));
-                permitted.ServerAddress = next.ServerAddress; permitted.LeaseSeconds = next.LeaseSeconds; permitted.MaxLeaseSeconds = next.MaxLeaseSeconds;
-                if (current.Migration != null && Json.Write(permitted) != Json.Write(next)) throw new InvalidOperationException("Для изменения сети или правил сначала восстановите прежние правила. Адрес сервера и окна доступа можно менять без восстановления.");
-                if (next.UdpPort != previous.UdpPort || next.ListenAddress != previous.ListenAddress)
-                { using var test = new System.Net.Sockets.UdpClient(new System.Net.IPEndPoint(System.Net.IPAddress.Parse(next.ListenAddress), next.UdpPort)); }
-                Store.SaveConfig(next);
-                return "Настройки сохранены. Адрес и окна доступа действуют для новых скриптов и запросов; существующие разрешения сохраняют свой срок. При изменении сети перезапустите службу перед применением.";
             case "clients-list": return Json.Write(Store.Load().Clients.Select(c => new { c.Id, c.Name, c.Enabled, c.Expires, c.Created, c.LastIp, c.LastRequest, c.LeaseSeconds }));
             case "clients-edit":
                 var editState = Store.Load(); var edit = editState.Clients.Single(c => c.Id == args[0]);
                 if (args[1].Length is < 1 or > 100) throw new ArgumentException("Некорректное имя.");
                 if (args.Length > 3) { int seconds = int.Parse(args[3]); if (seconds < 30 || seconds > Store.Config().MaxLeaseSeconds) throw new ArgumentException("Окно превышает допустимые пределы."); edit.LeaseSeconds = seconds; }
                 edit.Name = args[1]; edit.Expires = args.Length > 2 && args[2] != "" ? DateTimeOffset.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : null; Store.Save(editState); return "Клиент изменён.";
-            case "events":
-                string log = Path.Combine(Store.Root, "events.jsonl"); return File.Exists(log) ? string.Join("\n", File.ReadLines(log).TakeLast(100)) : "Событий нет.";
             default: throw new ArgumentException("Неизвестная команда.");
         }
     }
+    private string SaveConfig(Config next, CancellationToken cancellationToken)
+    {
+        const string saved = "Настройки сохранены. Адрес и окна доступа действуют для новых скриптов и запросов; существующие разрешения сохраняют свой срок.";
+        next.Validate();
+        bool changed;
+        using (Store.LockPolicy())
+        {
+            using (Store.Lock())
+            {
+                var migration = Store.Load().Migration;
+                var previous = Store.Config();
+                if (migration == null)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    bool networkChanged = next.UdpPort != previous.UdpPort || next.ListenAddress != previous.ListenAddress;
+                    if (networkChanged)
+                    {
+                        using var test = new System.Net.Sockets.UdpClient(
+                            new System.Net.IPEndPoint(System.Net.IPAddress.Parse(next.ListenAddress), next.UdpPort));
+                    }
+                    Store.SaveConfig(next);
+                    return networkChanged ? saved + " При изменении сети перезапустите службу перед применением." : saved;
+                }
+                changed = !next.TrustedRdpCidrs.SequenceEqual(migration.Config.TrustedRdpCidrs);
+            }
+        }
+        engine.UpdateTrustedAllowlist(next, cancellationToken);
+        if (!changed) return saved;
+        try { RefreshHealth(cancellationToken); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (Exception error) when (error is IOException or TimeoutException or
+            System.ComponentModel.Win32Exception or System.Runtime.InteropServices.COMException)
+        {
+            Store.TryLog("AllowlistHealthCheckFailed", error.Message);
+        }
+        return "Белый список RDP обновлён. Существующие временные разрешения сохранены.";
+    }
+
     public string ProtectionStatus(State state, bool serviceRunning) => state.Migration switch
     {
         null => "Не настроено",
@@ -110,7 +146,8 @@ public sealed class Administration(Engine engine, string executable)
         { Applying: true } => "Применение и проверка правил",
         _ when !serviceRunning => "Служба остановлена; актуальность политики не проверена",
         { Confirmed: false } => "Ожидается подтверждение нового RDP-сеанса",
-        { } m when checkedGeneration == m.Generation => protection,
+        { } m when checkedGeneration == m.Generation && checkedAllowlist != null &&
+            m.Config.TrustedRdpCidrs.SequenceEqual(checkedAllowlist) => protection,
         _ => "Проверка политики выполняется"
     };
     public string Health(CancellationToken cancellationToken = default)
@@ -126,7 +163,9 @@ public sealed class Administration(Engine engine, string executable)
         cancellationToken.ThrowIfCancellationRequested();
         using var guard = Store.Lock();
         var latest = Store.Load();
-        if (latest.Migration?.Generation != state.Migration.Generation || latest.Migration.Confirmed != true) return "Состояние политики изменилось; требуется новая проверка";
+        if (latest.Migration?.Generation != state.Migration.Generation || latest.Migration.Confirmed != true ||
+            !latest.Migration.Config.TrustedRdpCidrs.SequenceEqual(c.TrustedRdpCidrs))
+            return "Состояние политики изменилось; требуется новая проверка";
         state = latest;
         if (!plan.Safe || plan.Disable.Count > 0) return "Защита нарушена: " + string.Join("; ", plan.Conflicts.Concat(plan.Disable.Select(r => r.Name)));
         var rules = engine.Firewall.Rules();

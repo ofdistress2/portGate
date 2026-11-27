@@ -159,12 +159,134 @@ public sealed class Engine(Store store, IFirewall firewall)
         using var guard = store.Lock(); var state = store.Load();
         var client = state.Clients.Single(c => c.Id == id);
         if (rotate) { client.ProtectedKey = Native.Protect(RandomNumberGenerator.GetBytes(32)); client.Enabled = true; } else client.Enabled = false;
-        firewall.RemoveOwned(state.Leases.Where(l => l.ClientId == id).SelectMany(LeaseRules));
-        state.Leases.RemoveAll(l => l.ClientId == id);
-        state.Requests.RemoveAll(r => r.ClientId == id); store.Save(state);
+        RemoveClientAccess(state, id);
+        store.Save(state);
         store.Log(rotate ? "ClientRotated" : "ClientRevoked", id);
     }
+    public void DeleteClient(string id)
+    {
+        using var guard = store.Lock();
+        var state = store.Load();
+        var client = state.Clients.SingleOrDefault(c => c.Id == id)
+            ?? throw new InvalidOperationException("Ключ уже удалён или не найден.");
+        RemoveClientAccess(state, id);
+        state.Clients.Remove(client);
+        store.Save(state);
+        store.TryLog("ClientDeleted", id);
+    }
+    private void RemoveClientAccess(State state, string id)
+    {
+        firewall.RemoveOwned(state.Leases.Where(l => l.ClientId == id).SelectMany(LeaseRules));
+        state.Leases.RemoveAll(l => l.ClientId == id);
+        state.Requests.RemoveAll(r => r.ClientId == id);
+    }
     public void Apply(Action scheduleRollback, int session) => Apply(_ => scheduleRollback(), session);
+
+    public void UpdateTrustedAllowlist(Config next, CancellationToken token = default)
+    {
+        next.Validate();
+        using var policy = store.LockPolicy();
+        Config previous;
+        Migration migration;
+        using (store.Lock())
+        {
+            migration = ConfirmedPolicy(store.Load());
+            previous = store.Config();
+            ValidateActiveConfig(previous, next);
+        }
+
+        string previousRemote = string.Join(",", migration.Config.TrustedRdpCidrs);
+        string remote = string.Join(",", next.TrustedRdpCidrs);
+        bool changed = !next.TrustedRdpCidrs.SequenceEqual(migration.Config.TrustedRdpCidrs);
+        var planned = Json.Read<Config>(Json.Write(migration.Config));
+        planned.TrustedRdpCidrs = next.TrustedRdpCidrs;
+        planned.ServerAddress = next.ServerAddress;
+        planned.LeaseSeconds = next.LeaseSeconds;
+        planned.MaxLeaseSeconds = next.MaxLeaseSeconds;
+        if (changed)
+        {
+            var plan = firewall.Plan(planned, token);
+            if (!plan.Safe || plan.Disable.Count > 0 || plan.RdpPort != planned.RdpPort)
+                throw new InvalidOperationException("Живое обновление белого списка отклонено. " +
+                    string.Join("\n", plan.Conflicts.Concat(plan.Disable.Select(r => r.Name))));
+        }
+
+        using var guard = store.Lock();
+        var latest = store.Load();
+        var active = ConfirmedPolicy(latest);
+        if (active.Generation != migration.Generation)
+            throw new InvalidOperationException("Состояние политики изменилось; требуется новая проверка.");
+        token.ThrowIfCancellationRequested();
+        var updated = new List<string>();
+        string[] names = planned.AllowUdpRdp ? ["portgate.Trusted.6", "portgate.Trusted.17"] : ["portgate.Trusted.6"];
+        if (changed)
+        {
+            var rules = firewall.Rules();
+            foreach (string name in names)
+            {
+                var rule = rules.SingleOrDefault(r => r.Group == WindowsFirewall.Group && r.Name == name);
+                int protocol = name == "portgate.Trusted.6" ? 6 : 17;
+                if (rule == null || !rule.Enabled || rule.Action != 1 || rule.Direction != 1 ||
+                    rule.Protocol != protocol || rule.Ports != planned.RdpPort.ToString() || rule.Profiles != 7 ||
+                    rule.Application != "" || rule.Service != "" ||
+                    Cidr.NormalizeFirewallAddresses(rule.Remote) != Cidr.NormalizeFirewallAddresses(previousRemote))
+                    throw new InvalidOperationException("Защита нарушена: белый список изменён");
+            }
+        }
+        bool configSaved = false;
+        try
+        {
+            if (changed)
+                foreach (string name in names)
+                {
+                    firewall.UpdateRemote(name, remote);
+                    updated.Add(name);
+                }
+            active.Config = planned;
+            store.SaveConfig(next);
+            configSaved = true;
+            store.Save(latest);
+        }
+        catch (Exception failure)
+        {
+            var rollbackErrors = new List<Exception>();
+            foreach (string name in Enumerable.Reverse(updated))
+            {
+                try { firewall.UpdateRemote(name, previousRemote); }
+                catch (Exception error) { rollbackErrors.Add(error); }
+            }
+            if (configSaved)
+            {
+                try { Store.Atomic(store.ConfigPath, Json.Write(previous), false); }
+                catch (Exception error) { rollbackErrors.Add(error); }
+            }
+            if (rollbackErrors.Count > 0)
+            {
+                store.TryLog("AllowlistRollbackIncomplete", string.Join(" | ", rollbackErrors.Select(e => e.Message)));
+                throw new AggregateException("Не удалось полностью откатить обновление белого списка: " +
+                    string.Join(" | ", rollbackErrors.Select(e => e.Message)), [failure, .. rollbackErrors]);
+            }
+            throw;
+        }
+        if (changed) store.TryLog("AllowlistUpdated", string.Join(", ", next.TrustedRdpCidrs));
+    }
+
+    private static Migration ConfirmedPolicy(State state) =>
+        state.Migration is { Confirmed: true, Applying: false, Restoring: false, RestoreProblems.Length: 0 } migration
+            ? migration : throw new InvalidOperationException("Настройки доступны после подтверждения защиты или завершения восстановления.");
+
+    private static void ValidateActiveConfig(Config previous, Config next)
+    {
+        if (next.TrustedRdpCidrs.Length == 0)
+            throw new InvalidOperationException("При действующей защите белый список не может быть пустым.");
+        var permitted = Json.Read<Config>(Json.Write(previous));
+        permitted.ServerAddress = next.ServerAddress;
+        permitted.LeaseSeconds = next.LeaseSeconds;
+        permitted.MaxLeaseSeconds = next.MaxLeaseSeconds;
+        permitted.TrustedRdpCidrs = next.TrustedRdpCidrs;
+        if (Json.Write(permitted) != Json.Write(next))
+            throw new InvalidOperationException("Для изменения сети или правил сначала восстановите прежние правила. Адрес сервера и окна доступа можно менять без восстановления.");
+    }
 
     public DateTimeOffset Apply(Action<DateTimeOffset> scheduleRollback, int session, CancellationToken token = default)
     {

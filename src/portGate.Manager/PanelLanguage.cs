@@ -46,6 +46,7 @@ internal static class PanelLanguage
         ["Ожидается подтверждение нового RDP-сеанса"] = "Waiting for confirmation from a new RDP session",
         ["Проверка политики выполняется"] = "Checking the firewall policy",
         ["Состояние политики изменилось; требуется новая проверка"] = "The firewall policy changed and needs to be checked again",
+        ["Состояние политики изменилось; требуется новая проверка."] = "The firewall policy changed and needs to be checked again.",
         ["Защита нарушена: правило авторизации изменено"] = "Protection interrupted: the authorization rule changed",
         ["Защита нарушена: белый список изменён"] = "Protection interrupted: the allowlist changed",
         ["Защита нарушена: временное правило изменено"] = "Protection interrupted: a temporary rule changed",
@@ -55,8 +56,17 @@ internal static class PanelLanguage
         ["Временные разрешения отозваны."] = "Temporary grants were revoked.",
         ["Разрешение отозвано. Клиент может запросить доступ заново."] = "The grant was revoked. The client can request access again.",
         ["Доступ отозван."] = "Access revoked.",
+        ["Журнал очищен."] = "Journal cleared.",
+        ["Ключ удалён."] = "Key deleted.",
+        ["Ключ уже удалён или не найден."] = "The key was already deleted or could not be found.",
         ["Ключ перевыпущен. Старые скрипты недействительны."] = "The key was rotated. Existing scripts are no longer valid.",
         ["Клиент изменён."] = "The client was updated.",
+        ["Белый список RDP обновлён. Существующие временные разрешения сохранены."] = "The RDP allowlist was updated. Existing temporary grants were preserved.",
+        ["При действующей защите белый список не может быть пустым."] = "The allowlist must contain at least one address while protection is active.",
+        ["Настройки доступны после подтверждения защиты или завершения восстановления."] = "Settings become available after protection is confirmed or restoration finishes.",
+        ["Постоянный белый список RDP не может охватывать все адреса IPv4 или IPv6."] = "The permanent RDP allowlist cannot cover all IPv4 or IPv6 addresses.",
+        ["Настройки сохранены. Адрес и окна доступа действуют для новых скриптов и запросов; существующие разрешения сохраняют свой срок."] =
+            "Settings saved. The address and access windows apply to new scripts and requests. Existing grants retain their expiry.",
         ["Настройки сохранены. Адрес и окна доступа действуют для новых скриптов и запросов; существующие разрешения сохраняют свой срок. При изменении сети перезапустите службу перед применением."] =
             "Settings saved. The address and access windows apply to new scripts and requests. Existing grants retain their expiry. Restart the service before applying network changes.",
         ["Слушатель авторизации запущен."] = "The authorization listener started.",
@@ -89,6 +99,8 @@ internal static class PanelLanguage
         ("Не удалось определить область действия запрета RDP: ", "The scope of an RDP block could not be determined: "),
         ("Существующий запрет сохранится. Указанные адреса могут не получить доступ к RDP после авторизации: ", "The existing block will remain. The specified addresses may still be denied RDP after authorization: "),
         ("Приём UDP: ", "UDP receive: "),
+        ("Живое обновление белого списка отклонено. ", "The live allowlist update was rejected. "),
+        ("Не удалось полностью откатить обновление белого списка: ", "The allowlist update could not be fully rolled back: "),
     ];
 
     internal static string DisplayDetail(string detail)

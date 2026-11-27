@@ -79,7 +79,9 @@ Open the file in Script Editor on the Mac and select **Run**. To save a compiled
 .\portgate.Host.exe uninstall --keep-trusted
 ```
 
-Stopping the service removes temporary grants and keeps the allowlist. Restore reverts changes made by portGate. If an administrator or another tool changed an affected rule in the meantime, resolve the reported conflict manually before proceeding. For changes to network or firewall settings under an active policy, restore the previous rules, save the new configuration, restart the service, and apply the new plan.
+Stopping the service removes temporary grants and keeps the allowlist. Restore reverts changes made by portGate. If an administrator or another tool changed an affected rule in the meantime, resolve the reported conflict manually before proceeding.
+
+After confirming protection, update the addresses in Settings or with `config-save`. Keep at least one IP address or CIDR. PortGate checks and applies the updated list immediately, without restarting the service or requiring another RDP sign-in confirmation. Temporary grants retain their expiry. To change network settings or other firewall settings, restore the previous rules, save the new configuration, restart the service, and apply the new plan.
 
 ## Data and limitations
 

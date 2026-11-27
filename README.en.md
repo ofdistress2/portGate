@@ -18,9 +18,9 @@ After verifying the response, portGate adds a temporary Windows Firewall rule fo
 
 ![portGate Overview showing RDP protection and temporary access grants](docs/images/overview.png)
 
-| Create a client access pass | Settings |
+| Clients | Settings |
 | --- | --- |
-| [![portGate Create access client dialog](docs/images/clients.png)](docs/images/clients.png) | [![portGate language, UDP port, and allowlist settings](docs/images/settings.png)](docs/images/settings.png) |
+| [![portGate client list and key actions](docs/images/clients.png)](docs/images/clients.png) | [![portGate language, UDP port, and allowlist settings](docs/images/settings.png)](docs/images/settings.png) |
 
 ## Install
 

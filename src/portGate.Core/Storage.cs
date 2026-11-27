@@ -98,6 +98,20 @@ public sealed class Store
         }
         File.AppendAllText(path, System.Text.Json.JsonSerializer.Serialize(new { time = DateTimeOffset.UtcNow, kind, detail }) + "\n");
     }
+    public string ReadRecentEvents()
+    {
+        using var guard = Acquire("journal", 3);
+        string path = Path.Combine(Root, "events.jsonl");
+        return File.Exists(path) ? string.Join("\n", File.ReadLines(path).TakeLast(100)) : "Событий нет.";
+    }
+    public void ClearEvents()
+    {
+        using var guard = Acquire("journal", 3);
+        if (!Directory.Exists(Root)) return;
+        string path = Path.Combine(Root, "events.jsonl");
+        for (int i = 4; i >= 1; i--) File.Delete(path + "." + i);
+        File.Delete(path);
+    }
     public void TryLog(string kind, string detail)
     {
         try { Log(kind, detail); }

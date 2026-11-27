@@ -10,7 +10,7 @@ portGate ограничивает сетевой доступ к удалённ�
 
 - **Сервер и панель управления:** Windows Server 2016, 2019 или 2022, x64. Список целевых платформ и результаты их проверки приведены в [отчёте](docs/validation.md).
 - **Пропуск для Windows:** `.bat` или `.ps1` на Windows PowerShell 5.1. **Пропуск для macOS:** персональный `.applescript` или сохранённый из него `.scpt`. Экспортированный файл содержит ключ доступа.
-- **Версия 1.0.13:** [скачать portGate для Windows x64](https://github.com/ofdistress2/portGate/releases/latest). Для автономной сборки отдельная установка .NET Runtime не требуется.
+- **Версия 1.0.14:** [скачать portGate для Windows x64](https://github.com/ofdistress2/portGate/releases/latest). Для автономной сборки отдельная установка .NET Runtime не требуется.
 
 ## Скриншоты
 
@@ -18,9 +18,9 @@ portGate ограничивает сетевой доступ к удалённ�
 
 ![Обзор portGate со статусом защиты RDP и временными допусками](docs/images/overview.png)
 
-| Создание клиентского пропуска | Настройки |
+| Клиенты | Настройки |
 | --- | --- |
-| [![Диалог создания клиента portGate](docs/images/clients.png)](docs/images/clients.png) | [![Настройки языка, порта и белого списка portGate](docs/images/settings.png)](docs/images/settings.png) |
+| [![Список клиентов и действия с ключами portGate](docs/images/clients.png)](docs/images/clients.png) | [![Настройки языка, порта и белого списка portGate](docs/images/settings.png)](docs/images/settings.png) |
 
 ## Установка
 

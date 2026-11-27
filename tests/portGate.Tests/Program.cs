@@ -395,6 +395,7 @@ if (policySnapshot != null)
 // Exercise the stdout boundary used by Manager, including Console.WriteLine's newline.
 var dailyStore = new Store(Path.Combine(temp, "daily")); dailyStore.Initialize(false);
 var dailyConfig = dailyStore.Config(); dailyConfig.ServerAddress = "rdp.example.com"; dailyConfig.LeaseSeconds = 86400; dailyConfig.RdpPort = 3389;
+dailyConfig.TrustedRdpCidrs = ["192.0.2.8"];
 dailyStore.SaveConfig(dailyConfig);
 var dailyFirewall = new MemoryFirewall(); var dailyEngine = new Engine(dailyStore, dailyFirewall);
 var dailyAdmin = new portGate.Host.Administration(dailyEngine, "unused-in-tests.exe");
@@ -473,6 +474,81 @@ healthStore.Save(healthState);
 Check(healthAdmin.RefreshHealth(), "A committed grant with its expected rule passes the health check");
 healthFirewall.Remove(temporaryRule.Name);
 Check(healthAdmin.Health().Contains("временное правило изменено"), "Missing rule for a committed grant still fails the health check");
+
+var liveStore = new Store(Path.Combine(temp, "live-allowlist"));
+liveStore.Initialize(false);
+var liveConfig = liveStore.Config();
+liveConfig.TrustedRdpCidrs = ["192.0.2.8"];
+liveStore.SaveConfig(liveConfig);
+var liveFirewall = new LiveUpdateFirewall();
+var liveEngine = new Engine(liveStore, liveFirewall);
+liveEngine.Apply(() => { }, 0);
+var liveState = liveStore.Load();
+liveState.Migration!.Confirmed = true;
+var liveLease = new Lease { RuleId = "portgate.Lease.live", Ip = "198.51.100.1", Phase = "Committed", Expires = DateTimeOffset.UtcNow.AddMinutes(5) };
+liveState.Leases.Add(liveLease);
+liveStore.Save(liveState);
+foreach (var (suffix, protocol) in new[] { (".tcp", 6), (".udp", 17) })
+    liveFirewall.Put(new() { Name = liveLease.RuleId + suffix, Group = WindowsFirewall.Group, Protocol = protocol, Ports = "3389", Remote = liveLease.Ip });
+var liveAdmin = new portGate.Host.Administration(liveEngine, "unused.exe");
+var nextLive = liveStore.Config();
+nextLive.TrustedRdpCidrs = ["198.51.100.64/26", "2001:db8::8"];
+nextLive.LeaseSeconds = 600;
+liveAdmin.Dispatch("config-save", [Json.Write(nextLive)], 0);
+Check(liveFirewall.Rules().Where(r => r.Name.StartsWith("portgate.Trusted.")).All(r => r.Remote == string.Join(",", nextLive.TrustedRdpCidrs)) &&
+    liveStore.Load().Migration!.Config.TrustedRdpCidrs.SequenceEqual(nextLive.TrustedRdpCidrs) &&
+    liveStore.Config().TrustedRdpCidrs.SequenceEqual(nextLive.TrustedRdpCidrs) &&
+    liveStore.Load().Migration!.Config.LeaseSeconds == 600 && liveAdmin.RefreshHealth(),
+    "Confirmed allowlist updates both live rules, configuration and health");
+Check(Json.Write(liveStore.Load().Leases.Single()) == Json.Write(liveLease) &&
+    liveStore.Load().Migration!.Generation == liveState.Migration.Generation,
+    "Live update preserves the existing lease and policy generation");
+nextLive.TrustedRdpCidrs = [];
+Reject(() => liveAdmin.Dispatch("config-save", [Json.Write(nextLive)], 0), "Active allowlist cannot be empty");
+nextLive.TrustedRdpCidrs = ["203.0.113.1"];
+nextLive.UdpPort++;
+Reject(() => liveAdmin.Dispatch("config-save", [Json.Write(nextLive)], 0), "Active policy locks the UDP port");
+nextLive.UdpPort--;
+liveFirewall.RejectPlan = true;
+Reject(() => liveAdmin.Dispatch("config-save", [Json.Write(nextLive)], 0), "An explicit block rejects a live update before mutation");
+liveFirewall.RejectPlan = false;
+liveFirewall.FailUdp = true;
+Reject(() => liveAdmin.Dispatch("config-save", [Json.Write(nextLive)], 0), "Failure updating UDP rolls the TCP allowlist back");
+liveFirewall.FailUdp = false;
+using (File.Open(liveStore.StatePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+{
+    try { liveAdmin.Dispatch("config-save", [Json.Write(nextLive)], 0); throw new Exception("Locked state file was replaced."); }
+    catch (IOException) { Check(true, "Failure persisting state rolls back rules and configuration"); }
+}
+string restoredHealth = liveAdmin.Health();
+Check(restoredHealth == "RDP ограничен по IP",
+    "Rejected updates preserve the prior rules: " + restoredHealth);
+Check(liveStore.Config().TrustedRdpCidrs.SequenceEqual(["198.51.100.64/26", "2001:db8::8"]),
+    "Rejected updates preserve the prior saved configuration");
+
+var deleteClient = liveEngine.CreateClient("Delete me", 300, null);
+var keepClient = liveEngine.CreateClient("Keep me", 300, null);
+var beforeDelete = liveStore.Load();
+var deleteLease = new Lease { ClientId = deleteClient.Id, Ip = liveLease.Ip, RuleId = "portgate.Lease.delete", Phase = "Committed" };
+beforeDelete.Leases.Add(deleteLease);
+beforeDelete.Requests.Add(new RequestRecord { ClientId = deleteClient.Id, LeaseId = deleteLease.RuleId });
+liveStore.Save(beforeDelete);
+foreach (var suffix in new[] { ".tcp", ".udp" })
+    liveFirewall.Put(new() { Name = deleteLease.RuleId + suffix, Group = WindowsFirewall.Group });
+liveAdmin.Dispatch("clients-delete", [deleteClient.Id], 0);
+var afterDelete = liveStore.Load();
+Check(afterDelete.Clients.Single().Id == keepClient.Id && afterDelete.Leases.Single().RuleId == liveLease.RuleId &&
+    afterDelete.Requests.All(r => r.ClientId != deleteClient.Id) &&
+    liveFirewall.Rules().All(r => !r.Name.StartsWith(deleteLease.RuleId, StringComparison.Ordinal)),
+    "Deleting a key removes only its client record, requests and temporary rules");
+Reject(() => liveAdmin.Dispatch("clients-delete", [deleteClient.Id], 0), "A deleted key cannot be deleted again");
+string journalPath = Path.Combine(liveStore.Root, "events.jsonl");
+File.WriteAllText(journalPath + ".4", "Archived event");
+liveAdmin.Dispatch("events-clear", [], 0);
+Check(liveAdmin.Dispatch("events", [], 0) == "Событий нет." && !File.Exists(journalPath + ".4"),
+    "Clearing the journal removes current and archived events");
+liveStore.Log("EventAfterClear", "New event");
+Check(liveAdmin.Dispatch("events", [], 0).Contains("EventAfterClear"), "The journal accepts new events after clearing");
 
 foreach (var (command, parameters, usage) in new (string, string[], string)[]
 {
@@ -559,8 +635,31 @@ sealed class SlowFirewall : IFirewall, IDisposable
     public ManualResetEventSlim Release { get; } = new();
     public List<FirewallRule> Rules() => [];
     public void Put(FirewallRule rule) => throw new NotSupportedException();
+    public void UpdateRemote(string name, string remote) => throw new NotSupportedException();
     public void Remove(string name) => throw new NotSupportedException();
     public void Enable(string name, bool enabled) => throw new NotSupportedException();
     public FirewallPlan Plan(Config config) { Entered.Set(); if (!Release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException(); return new() { RdpPort = 3389 }; }
     public void Dispose() { Entered.Dispose(); Release.Dispose(); }
+}
+
+sealed class LiveUpdateFirewall : IFirewall
+{
+    private readonly MemoryFirewall inner = new();
+    public bool FailUdp { get; set; }
+    public bool RejectPlan { get; set; }
+    public List<FirewallRule> Rules() => inner.Rules();
+    public void Put(FirewallRule rule) => inner.Put(rule);
+    public void Remove(string name) => inner.Remove(name);
+    public void Enable(string name, bool enabled) => inner.Enable(name, enabled);
+    public void UpdateRemote(string name, string remote)
+    {
+        if (FailUdp && name == "portgate.Trusted.17") throw new IOException("Simulated firewall failure");
+        inner.UpdateRemote(name, remote);
+    }
+    public FirewallPlan Plan(Config config)
+    {
+        var plan = inner.Plan(config);
+        if (RejectPlan) plan.Conflicts.Add("Simulated explicit block");
+        return plan;
+    }
 }

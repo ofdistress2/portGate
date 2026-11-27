@@ -159,11 +159,11 @@ internal static class Entry
 portGate — Windows Server 2016/2019/2022. Запуск администратора.
 init | install | uninstall --restore/--keep-trusted
 start | stop | restart | status | diagnose | plan | apply | confirm | restore | cleanup
-config | config-save FILE.json | events | leases-revoke | lease-revoke ID
+config | config-save FILE.json | events | events-clear | leases-revoke | lease-revoke ID
 clients list
 clients create NAME SECONDS [EXPIRY_ISO8601]
 clients edit ID NAME [EXPIRY_ISO8601]
-clients revoke ID | clients rotate ID
+clients revoke ID | clients rotate ID | clients delete ID
 clients export ID SERVER OUTPUT.bat|OUTPUT.ps1|OUTPUT.applescript [true]
 run — консольный запуск; service — режим SCM
 --data PATH — каталог состояния (по умолчанию %ProgramData%\portgate)

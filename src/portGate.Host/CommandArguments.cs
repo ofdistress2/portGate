@@ -12,6 +12,8 @@ internal static class CommandArguments
             "clients-edit" when count < 2 => "clients edit ID NAME [EXPIRY_ISO8601]",
             "clients-revoke" when count < 1 => "clients revoke ID",
             "clients-rotate" when count < 1 => "clients rotate ID",
+            "clients-delete" when count != 1 => "clients delete ID",
+            "events-clear" when count != 0 => "events-clear",
             "clients-export" when fromConsole && count < 3 => "clients export ID SERVER OUTPUT.bat|OUTPUT.ps1|OUTPUT.applescript [true]",
             "clients-export" when count < 2 => "clients export ID SERVER",
             _ => null
